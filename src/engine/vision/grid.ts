@@ -610,13 +610,14 @@ export function extractBoxes(gray: Gray, geom: GridGeometry): GridScan {
  * meio da rolagem não atrapalham, e a imagem menor sai mais rápido. Sem achar, procura na imagem toda (o
  * vendedor pode ter mudado de lugar). */
 export function scan(gray: Gray, region: [number, number, number, number] | null = null, hint: GridGeometry | null = null): GridScan | null {
-  if (region === null && hint !== null) {
-    const { w, h } = gray
+  if (hint !== null) {
+    // com região (v0.1: metade direita da tela), a faixa do hint fica dentro dela e a busca nunca sai dela
+    const [rx, ry, rw, rh] = region ?? [0, 0, gray.w, gray.h]
     const p = hint.pitch
-    const xa = Math.max(0, Math.trunc(hint.x0 - p))
-    const xb = Math.min(w, Math.trunc(hint.x0 + (hint.cols + TOOLTIP_MAX_W) * p))
+    const xa = Math.max(rx, Math.trunc(hint.x0 - p))
+    const xb = Math.min(rx + rw, Math.trunc(hint.x0 + (hint.cols + TOOLTIP_MAX_W) * p))
     if (xb - xa > MIN_COLS * p) {
-      const found = scanRegion(gray, [xa, 0, xb - xa, h], [p * (1 - TRACK_PITCH), p * (1 + TRACK_PITCH)])
+      const found = scanRegion(gray, [xa, ry, xb - xa, rh], [p * (1 - TRACK_PITCH), p * (1 + TRACK_PITCH)])
       if (found !== null && Math.abs(found.geometry.x0 - hint.x0) <= TRACK_X * p) return found
     }
   }
