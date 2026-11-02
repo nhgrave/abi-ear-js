@@ -50,6 +50,7 @@ vários idiomas, principalmente inglês e português.
 
 - **Navegador:** Chrome ou Edge no Windows. Só eles capturam o áudio do sistema por `getDisplayMedia`, e só ao compartilhar a **tela inteira** com "compartilhar áudio do sistema" marcado. Nos outros navegadores, ou se a página não receber faixa de áudio, ela explica o motivo e não segue.
 - **Jogo:** em janela ou em tela cheia sem borda. É o modo em que a captura funciona hoje.
+- **Resolução (decisão do usuário):** qualquer resolução, sem garantia. O motor não pode supor 1080p. Tamanho de célula, margens, recortes do OCR e tamanho do tooltip são sempre medidos em células do grid detectado, nunca em pixels fixos. Só 1080p é testado. Fora de 1080p, a página mostra um aviso discreto: "resolução ainda não testada".
 - **Isolamento:** dois usuários ao mesmo tempo não compartilham nada. Como tudo roda no navegador de cada um, isso vale por construção.
 - **Hospedagem:** qualquer serviço de site estático (Cloudflare Pages, GitHub Pages, servidor próprio). O build gera uma pasta pronta para publicar.
 - **Atribuição:** a base, os sons e as imagens vêm do jogo, via abibuilder.com e
@@ -66,6 +67,7 @@ vários idiomas, principalmente inglês e português.
 6. **Frontend em Vue.**
 7. **Atualização manual:** quando o jogo mudar, o autor roda o script de assets e publica uma nova versão.
 8. **Tabela de rótulos em português:** o autor faz uma captura do vendedor com o jogo em português.
+9. **Resolução:** qualquer resolução, sem garantia. Só 1080p é testado.
 
 ## 6. Decisões técnicas (minhas; podem ser revistas)
 
