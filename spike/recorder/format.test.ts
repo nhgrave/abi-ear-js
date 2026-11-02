@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { encodeWav, frameName, epochOfFrame, streamProblems } from './format'
+import { encodeWav, frameName, epochOfFrame, streamProblems, levelDb } from './format'
 
 test('encodeWav writes a float32 mono header', () => {
   const buf = encodeWav(new Float32Array([0, 0.5, -1]), 48000)
@@ -23,4 +23,11 @@ test('a stream without audio cannot be recorded', () => {
   expect(streamProblems({ audioTracks: 0, displaySurface: 'window' }).length).toBeGreaterThan(0)
   expect(streamProblems({ audioTracks: 1, displaySurface: 'browser' }).length).toBeGreaterThan(0)
   expect(streamProblems({ audioTracks: 1, displaySurface: 'monitor' })).toEqual([])
+})
+
+test('levelDb converts linear amplitude to dBFS clamped to -60 floor', () => {
+  expect(levelDb(1)).toBe(0)
+  expect(levelDb(0.1)).toBeCloseTo(-20)
+  expect(levelDb(0)).toBe(-60)
+  expect(levelDb(1e-5)).toBe(-60)
 })

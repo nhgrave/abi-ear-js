@@ -8,6 +8,12 @@ export interface SessionMeta {
   frameIntervalMs: number
 }
 
+function writeAscii(view: DataView, offset: number, text: string): void {
+  for (let i = 0; i < text.length; i++) {
+    view.setUint8(offset + i, text.charCodeAt(i))
+  }
+}
+
 /**
  * Encodes audio samples to a 32-bit IEEE float WAV file (mono, format 3).
  */
@@ -25,25 +31,16 @@ export function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffe
   const view = new DataView(buffer)
 
   // RIFF identifier
-  view.setUint8(0, 'R'.charCodeAt(0))
-  view.setUint8(1, 'I'.charCodeAt(0))
-  view.setUint8(2, 'F'.charCodeAt(0))
-  view.setUint8(3, 'F'.charCodeAt(0))
+  writeAscii(view, 0, 'RIFF')
 
   // File length - 8
   view.setUint32(4, 36 + dataSize, true)
 
   // WAVE identifier
-  view.setUint8(8, 'W'.charCodeAt(0))
-  view.setUint8(9, 'A'.charCodeAt(0))
-  view.setUint8(10, 'V'.charCodeAt(0))
-  view.setUint8(11, 'E'.charCodeAt(0))
+  writeAscii(view, 8, 'WAVE')
 
   // fmt chunk marker
-  view.setUint8(12, 'f'.charCodeAt(0))
-  view.setUint8(13, 'm'.charCodeAt(0))
-  view.setUint8(14, 't'.charCodeAt(0))
-  view.setUint8(15, ' '.charCodeAt(0))
+  writeAscii(view, 12, 'fmt ')
 
   // Subchunk1Size (16 for PCM / IEEE float standard fmt)
   view.setUint32(16, 16, true)
@@ -67,10 +64,7 @@ export function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffe
   view.setUint16(34, bitsPerSample, true)
 
   // data chunk marker
-  view.setUint8(36, 'd'.charCodeAt(0))
-  view.setUint8(37, 'a'.charCodeAt(0))
-  view.setUint8(38, 't'.charCodeAt(0))
-  view.setUint8(39, 'a'.charCodeAt(0))
+  writeAscii(view, 36, 'data')
 
   // Subchunk2Size (data size)
   view.setUint32(40, dataSize, true)
@@ -115,4 +109,14 @@ export function streamProblems(s: { audioTracks: number; displaySurface?: string
     problems.push("Marque 'Compartilhar áudio do sistema' na janela do Chrome.")
   }
   return problems
+}
+
+/**
+ * Converts linear amplitude to dBFS: 20 * log10(x), clamped to a floor of -60.
+ * Returns -60 for x <= 0 or values below the floor.
+ */
+export function levelDb(x: number): number {
+  if (x <= 0) return -60
+  const db = 20 * Math.log10(x)
+  return db < -60 ? -60 : db
 }

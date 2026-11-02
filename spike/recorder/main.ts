@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { encodeWav, epochOfFrame, streamProblems, SessionMeta } from './format'
+import { encodeWav, epochOfFrame, streamProblems, SessionMeta, levelDb } from './format'
 import workletUrl from './capture-worklet.ts?worker&url'
 
 declare global {
@@ -91,15 +91,33 @@ let currentRms = 0
 
 function showError(msg: string): void {
   errorMessageEl.textContent = msg
-  errorBannerEl.classList.add('visible')
+  errorBannerEl.classList.remove('banner-info')
+  errorBannerEl.classList.add('banner-error', 'visible')
 }
 
-function clearError(): void {
+function showNotice(msg: string): void {
+  errorMessageEl.textContent = msg
+  errorBannerEl.classList.remove('banner-error')
+  errorBannerEl.classList.add('banner-info', 'visible')
+}
+
+function clearBanner(): void {
   errorMessageEl.textContent = ''
-  errorBannerEl.classList.remove('visible')
+  errorBannerEl.classList.remove('visible', 'banner-error', 'banner-info')
 }
 
-btnCloseErrorEl.addEventListener('click', clearError)
+btnCloseErrorEl.addEventListener('click', clearBanner)
+
+function formatDb(db: number): string {
+  const rounded = Math.round(db)
+  const val = Object.is(rounded, -0) ? 0 : rounded
+  return `${val < 0 ? '−' + Math.abs(val) : val} dB`
+}
+
+function onBeforeUnload(e: BeforeUnloadEvent): void {
+  e.preventDefault()
+  e.returnValue = ''
+}
 
 function formatSubfolderName(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -149,7 +167,15 @@ function updateUIState(): void {
   if (rootDirectoryHandle) {
     step1BadgeEl.className = 'step-badge badge-done'
     step1BadgeEl.textContent = 'Concluído'
-    step1StatusEl.innerHTML = `Pasta selecionada: 📁 <strong>${rootDirectoryHandle.name}</strong><br><small style="color: var(--text-sub);">Cada gravação criará sua própria subpasta YYYY-MM-DD-HHMMSS aqui dentro.</small>`
+    step1StatusEl.replaceChildren()
+    const prefix = document.createTextNode('Pasta selecionada: 📁 ')
+    const strong = document.createElement('strong')
+    strong.textContent = rootDirectoryHandle.name
+    const br = document.createElement('br')
+    const small = document.createElement('small')
+    small.style.color = 'var(--text-sub)'
+    small.textContent = 'Cada gravação criará sua própria subpasta YYYY-MM-DD-HHMMSS aqui dentro.'
+    step1StatusEl.append(prefix, strong, br, small)
     btnChooseFolderEl.textContent = '📁 Trocar pasta'
     btnChooseFolderEl.disabled = isRecording
   } else {
@@ -242,7 +268,11 @@ function updateUIState(): void {
     step3CardEl.classList.remove('disabled')
     step3BadgeEl.className = 'step-badge badge-warn'
     step3BadgeEl.textContent = 'Gravando'
-    step3StatusEl.innerHTML = `Gravando na subpasta: <code>${currentSubfolderName}</code>`
+    step3StatusEl.replaceChildren()
+    const recPrefix = document.createTextNode('Gravando na subpasta: ')
+    const code = document.createElement('code')
+    code.textContent = currentSubfolderName
+    step3StatusEl.append(recPrefix, code)
     btnRecordEl.disabled = isStopping
     btnRecordEl.className = 'btn btn-stop'
     btnRecordEl.textContent = '⏹ Parar gravação'
@@ -253,15 +283,16 @@ function updateUIState(): void {
 }
 
 async function handleChooseFolder(): Promise<void> {
-  clearError()
+  clearBanner()
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
     rootDirectoryHandle = handle
     updateUIState()
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      showError('Seleção de pasta cancelada pelo usuário.')
-    } else if (err instanceof DOMException && err.name === 'NotAllowedError') {
+      return
+    }
+    if (err instanceof DOMException && err.name === 'NotAllowedError') {
       showError('Permissão negada para acessar a pasta local.')
     } else {
       showError(`Erro ao escolher pasta: ${err instanceof Error ? err.message : String(err)}`)
@@ -269,12 +300,43 @@ async function handleChooseFolder(): Promise<void> {
   }
 }
 
-async function setupAudioPipeline(stream: MediaStream): Promise<void> {
+async function teardownAudioPipeline(): Promise<void> {
+  if (sourceNode) {
+    try {
+      sourceNode.disconnect()
+    } catch {}
+    sourceNode = null
+  }
+  if (workletNode) {
+    workletNode.port.onmessage = null
+    try {
+      workletNode.disconnect()
+    } catch {}
+    workletNode = null
+  }
+  if (gainNode) {
+    try {
+      gainNode.disconnect()
+    } catch {}
+    gainNode = null
+  }
   if (audioContext) {
     try {
       await audioContext.close()
     } catch {}
+    audioContext = null
   }
+  recentAudio.fill(0)
+  recentAudioIndex = 0
+  recentAudioFilled = 0
+  currentPeak = 0
+  currentRms = 0
+  meterReadoutEl.textContent = 'RMS −60 dB · pico −60 dB'
+  meterFillEl.style.width = '0%'
+}
+
+async function setupAudioPipeline(stream: MediaStream): Promise<void> {
+  await teardownAudioPipeline()
 
   const audioTracks = stream.getAudioTracks()
   if (audioTracks.length === 0) {
@@ -327,16 +389,8 @@ async function setupAudioPipeline(stream: MediaStream): Promise<void> {
 }
 
 async function handleShareScreen(): Promise<void> {
-  clearError()
+  clearBanner()
   try {
-    // If there's an existing stream, stop it
-    if (currentStream) {
-      for (const track of currentStream.getTracks()) {
-        track.stop()
-      }
-      currentStream = null
-    }
-
     const stream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 30 },
       audio: {
@@ -349,6 +403,14 @@ async function handleShareScreen(): Promise<void> {
       monitorTypeSurfaces: 'include',
     } as DisplayMediaStreamOptions & { systemAudio?: string; monitorTypeSurfaces?: string })
 
+    // If there's an existing stream, stop it
+    if (currentStream) {
+      for (const track of currentStream.getTracks()) {
+        track.stop()
+      }
+      await teardownAudioPipeline()
+    }
+
     currentStream = stream
     const vTracks = stream.getVideoTracks()
     videoTrack = vTracks[0] || null
@@ -356,19 +418,35 @@ async function handleShareScreen(): Promise<void> {
     videoPreviewEl.srcObject = stream
     await videoPreviewEl.play().catch(() => {})
 
-    // Attach track onended handlers
+    // Guard onended by stream identity
+    let streamEndedHandled = false
     const onEnded = async () => {
-      if (isRecording) {
-        showError('Compartilhamento encerrado pelo Chrome. A gravação foi finalizada e salva.')
-        await stopRecording()
-      } else {
-        showError('Compartilhamento de tela encerrado no Chrome.')
+      if (streamEndedHandled || currentStream !== stream) {
+        return
       }
+      streamEndedHandled = true
+
+      const wasRecording = isRecording
+      let savedOk = true
+      if (wasRecording) {
+        savedOk = (await stopRecording()) ?? true
+      }
+
+      await teardownAudioPipeline()
+
       currentStream = null
       videoTrack = null
       audioTrack = null
       videoPreviewEl.srcObject = null
       updateUIState()
+
+      if (wasRecording) {
+        if (savedOk) {
+          showNotice('Compartilhamento encerrado pelo Chrome: a gravação foi salva.')
+        }
+      } else {
+        showNotice('Compartilhamento encerrado.')
+      }
     }
 
     for (const track of stream.getTracks()) {
@@ -385,7 +463,7 @@ async function handleShareScreen(): Promise<void> {
     updateUIState()
   } catch (err) {
     if (err instanceof DOMException && err.name === 'NotAllowedError') {
-      showError('Permissão negada para compartilhamento de tela ou seleção cancelada.')
+      showNotice('Compartilhamento cancelado.')
     } else {
       showError(`Erro ao compartilhar tela: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -396,7 +474,7 @@ async function handleShareScreen(): Promise<void> {
 async function startRecording(): Promise<void> {
   if (!rootDirectoryHandle || !currentStream || isRecording || isStopping) return
 
-  clearError()
+  clearBanner()
   saveSummaryEl.classList.remove('visible')
 
   if (!videoPreviewEl.videoWidth || !videoPreviewEl.videoHeight) {
@@ -418,6 +496,7 @@ async function startRecording(): Promise<void> {
     silentDurationMs = 0
     isWritingFrame = false
     isRecording = true
+    window.addEventListener('beforeunload', onBeforeUnload)
 
     if (audioContext && audioContext.state === 'suspended') {
       await audioContext.resume()
@@ -469,15 +548,17 @@ async function startRecording(): Promise<void> {
 
     updateUIState()
   } catch (err) {
+    window.removeEventListener('beforeunload', onBeforeUnload)
     showError(`Erro ao iniciar gravação na pasta: ${err instanceof Error ? err.message : String(err)}`)
     isRecording = false
     updateUIState()
   }
 }
 
-async function stopRecording(): Promise<void> {
-  if (!isRecording || isStopping) return
+async function stopRecording(): Promise<boolean> {
+  if (!isRecording || isStopping) return false
   isStopping = true
+  window.removeEventListener('beforeunload', onBeforeUnload)
 
   // Stop frame loop
   if (frameIntervalTimer !== null) {
@@ -536,8 +617,10 @@ async function stopRecording(): Promise<void> {
     summaryFramesEl.textContent = `${framesWritten} quadros (pulos: ${framesSkipped})`
     summaryAudioEl.textContent = `${audioSec.toFixed(1)} s (${totalSamples} amostras)`
     saveSummaryEl.classList.add('visible')
+    return true
   } catch (err) {
     showError(`Falha ao salvar gravação: ${err instanceof Error ? err.message : String(err)}`)
+    return false
   } finally {
     isStopping = false
     updateUIState()
@@ -546,9 +629,11 @@ async function stopRecording(): Promise<void> {
 
 // Background loop for UI stats and audio meter (runs every 100ms)
 uiUpdateTimer = window.setInterval(() => {
-  // Update meter readout
-  meterReadoutEl.textContent = `RMS: ${currentRms.toFixed(3)} | Pico: ${currentPeak.toFixed(3)}`
-  const percent = Math.min(100, Math.round(currentPeak * 100 * 1.5))
+  // Update meter readout & fill
+  const rmsDb = levelDb(currentRms)
+  const peakDb = levelDb(currentPeak)
+  meterReadoutEl.textContent = `RMS ${formatDb(rmsDb)} · pico ${formatDb(peakDb)}`
+  const percent = Math.max(0, Math.min(100, ((peakDb + 60) / 60) * 100))
   meterFillEl.style.width = `${percent}%`
 
   if (videoTrack) {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gravador de Risco — abi-ear</title>
+  <title>abi-ear · gravador do protótipo</title>
   <style>
     :root {
       --bg: #0f1117;
@@ -91,6 +91,12 @@
       background-color: var(--error-bg);
       border: 1px solid var(--error-border);
       color: #fca5a5;
+    }
+
+    .banner-info {
+      background-color: #1a202c;
+      border: 1px solid #374151;
+      color: #e2e8f0;
     }
 
     .banner-close {
@@ -276,6 +282,13 @@
 
     .btn-stop:hover:not(:disabled) {
       background-color: #b45309;
+    }
+
+    .rec-note {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-top: 4px;
     }
 
     /* Stream problems alert */
@@ -468,6 +481,30 @@
       transition: width 0.06s ease-out;
     }
 
+    .meter-marker {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: calc((20 / 60) * 100%);
+      width: 1px;
+      background-color: #94a3b8;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .meter-marker-legend {
+      display: flex;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .meter-marker-label {
+      margin-left: calc((20 / 60) * 100%);
+      transform: translateX(-4px);
+      white-space: nowrap;
+    }
+
     /* Summary Card */
     .summary-card {
       background-color: var(--success-bg);
@@ -519,7 +556,7 @@
 <body>
   <div class="container">
     <header>
-      <h1>🎙️ abi-ear — Gravador de Protótipo</h1>
+      <h1>abi-ear — gravador do protótipo</h1>
       <p>Captura tela a 10 fps (JPEG 0.95) e áudio do sistema (48 kHz mono). As gravações são salvas exclusivamente no seu computador em subpastas com carimbo <code>YYYY-MM-DD-HHMMSS</code>.</p>
     </header>
 
@@ -601,6 +638,7 @@
       <div class="btn-row">
         <button id="btn-record" class="btn btn-record" disabled>▶ Gravar</button>
       </div>
+      <p class="rec-note">Mantenha esta aba aberta e visível durante a gravação: o Chrome reduz a captura de abas escondidas, e o áudio só é salvo ao clicar em Parar.</p>
 
       <!-- Live recording & meter section -->
       <div id="recording-section" class="recording-section">
@@ -642,10 +680,14 @@
         <div class="audio-meter-panel">
           <div class="meter-label-row">
             <span>Áudio do sistema (último segundo):</span>
-            <span id="meter-readout" class="meter-readout">RMS: 0.000 | Pico: 0.000</span>
+            <span id="meter-readout" class="meter-readout">RMS −60 dB · pico −60 dB</span>
           </div>
           <div class="meter-track">
             <div id="meter-fill" class="meter-bar"></div>
+            <div class="meter-marker" title="som do jogo costuma passar daqui"></div>
+          </div>
+          <div class="meter-marker-legend">
+            <span class="meter-marker-label">▲ −40 dB: som do jogo costuma passar daqui</span>
           </div>
         </div>
       </div>
