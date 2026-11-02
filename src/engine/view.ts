@@ -1,7 +1,7 @@
 /** Retrato simples da sessão para a interface (o Controller produz, os componentes só leem). */
 import type { GridGeometry } from './vision/types'
 
-export type CandidateView = { itemId: number; name: string; pct: number; icon: string | null }
+export type CandidateView = { itemId: number; name: string; pct: number; rarity: number; icon: string | null }
 
 export type BoxView = {
   uid: number
