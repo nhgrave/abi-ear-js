@@ -256,3 +256,37 @@ pegada só concorda se a seta cai na caixa em todas elas. Janela de 200 ms a 400
     perto da posição anterior, a 10 Hz ou mais.
   - **Honestidade:** se a seta não estiver parada na mesma caixa em dois quadros seguidos dentro da janela, a caixa
     mostra "?" em vez de chutar.
+
+## Revisão com rolagem acompanhada e a gravação 185459
+
+O avaliador anterior deduzia a rolagem pela posição do cursor do app. Com rolagem funda, isso falhava: na
+gravação 185459 a caixa estava na linha 19, e todas as pegadas saíam como erradas. O avaliador novo
+(`cursor_validate2.py`, fora do repositório) acompanha a rolagem como o app, com a `VendorSession` rodando um scan
+por quadro, e alinha a contagem de linhas com a do app pela moda entre as pegadas. A seta, a correção e o limite
+de 0,8 continuam os mesmos.
+
+| Gravação | Regra | Concorda | "?" | Errada |
+|----------|-------|----------|-----|--------|
+| 145712 (50) | último quadro entre 200 e 400 ms | 50 | 0 | 0 |
+| 145712 (50) | todos os quadros entre 150 e 400 ms na mesma caixa | 49 | 1 | 0 |
+| 160053 (65) | último quadro entre 200 e 400 ms | 62 | 2 | 1 |
+| 160053 (65) | todos os quadros entre 150 e 400 ms na mesma caixa | 63 | 1 | 1 |
+| 185459 (65) | último quadro entre 200 e 400 ms | 57 | 0 | 8 |
+| 185459 (65) | todos os quadros entre 150 e 400 ms na mesma caixa | 56 | 4 | 5 |
+| 155614 (21) | último quadro entre 200 e 400 ms | 16 | 0 | 5 |
+| 155614 (21) | todos os quadros entre 150 e 400 ms na mesma caixa | 15 | 4 | 2 |
+
+- **Visitas normais (145712 e 160053):** 112 de 115 concordam e há 1 errada. Nela, a seta estava 90 px abaixo do
+  cursor do app.
+- **Pega e devolve rápido (185459 e 155614):** os quadros mostram a área da caixa levantada em vermelho, com
+  "R Rotate", sempre no lugar registrado pelo app. Em alguns casos ela só sobe depois do som que o avaliador casou
+  (até 340 ms depois), ou seja, o som não era o daquele clique. Nesse ritmo, nem o gabarito é seguro, porque o app
+  registra o cursor quando ouve o som.
+- **Regra da v0.1:** todas as amostras da seta entre 150 e 400 ms antes do som na mesma caixa; senão, "?". Ao vivo,
+  com 10 quadros por segundo, a janela tem duas ou três amostras. Isso reforça a regra, que aqui foi medida a
+  5 quadros por segundo.
+- **Para a v0.2:** a área vermelha da caixa levantada é um sinal visual forte e específico. Vale testá-la como
+  confirmação da caixa atribuída.
+
+**Resultado do Brooch em campo (18:57):** depois da correção do passa-faixa, o som `Item_GoldChain_Up` foi
+reconhecido com nota 0,92, e o app mostrou Brooch 47%, Diamond Ring 47% e Pocket Watch 3%.
