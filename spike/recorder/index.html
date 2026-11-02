@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravador de Risco — abi-ear</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card-bg: #181b24;
+      --card-border: #262b3d;
+      --text-main: #f1f3f9;
+      --text-muted: #949eb5;
+      --text-sub: #6c768e;
+      --primary: #10b981;
+      --primary-hover: #059669;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --warning-border: #d97706;
+      --error-bg: rgba(239, 68, 68, 0.15);
+      --error-border: #b91c1c;
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.45;
+      padding: 16px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 780px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    header {
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    header h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Error & Alert Banners */
+    .banner {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .banner.visible {
+      display: flex;
+    }
+
+    .banner-error {
+      background-color: var(--error-bg);
+      border: 1px solid var(--error-border);
+      color: #fca5a5;
+    }
+
+    .banner-close {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 1.2rem;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0.7;
+    }
+
+    .banner-close:hover {
+      opacity: 1;
+    }
+
+    /* Step Cards */
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: opacity 0.2s, border-color 0.2s;
+    }
+
+    .card.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: #2b3145;
+      color: var(--text-main);
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .step-badge {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-pending {
+      background-color: #2b3145;
+      color: var(--text-muted);
+    }
+
+    .badge-done {
+      background-color: var(--success-bg);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-warn {
+      background-color: var(--warning-bg);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .card-state-text {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+
+    .card-state-text strong {
+      color: var(--text-main);
+    }
+
+    /* Instruction callout */
+    .instruction-callout {
+      background-color: #12151e;
+      border-left: 3px solid #3b82f6;
+      border-radius: 0 6px 6px 0;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+    }
+
+    .instruction-callout strong {
+      color: #93c5fd;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .instruction-callout ol {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button.btn {
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background-color 0.15s, opacity 0.15s;
+    }
+
+    button.btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: #2b3145;
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background-color: #384059;
+    }
+
+    .btn-record {
+      background-color: var(--danger);
+      color: #ffffff;
+      font-size: 1rem;
+      padding: 11px 24px;
+    }
+
+    .btn-record:hover:not(:disabled) {
+      background-color: var(--danger-hover);
+    }
+
+    .btn-stop {
+      background-color: #d97706;
+      color: #ffffff;
+      font-size: 1rem;
+      padding: 11px 24px;
+    }
+
+    .btn-stop:hover:not(:disabled) {
+      background-color: #b45309;
+    }
+
+    /* Stream problems alert */
+    .problems-box {
+      background-color: var(--warning-bg);
+      border: 1px solid var(--warning-border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      color: #fde68a;
+      font-size: 0.88rem;
+      display: none;
+    }
+
+    .problems-box.visible {
+      display: block;
+    }
+
+    .problems-box strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #fbbf24;
+    }
+
+    .problems-box ul {
+      padding-left: 18px;
+    }
+
+    /* Video preview */
+    .video-preview-wrapper {
+      position: relative;
+      background: #090a0f;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      overflow: hidden;
+      max-width: 320px;
+      max-height: 180px;
+      display: none;
+    }
+
+    .video-preview-wrapper.visible {
+      display: block;
+    }
+
+    video#video-preview {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Recording Section */
+    .recording-section {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 6px;
+      padding-top: 14px;
+      border-top: 1px solid var(--card-border);
+    }
+
+    .recording-section.visible {
+      display: flex;
+    }
+
+    .rec-status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .rec-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: 0.04em;
+    }
+
+    .rec-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #6b7280;
+    }
+
+    .rec-indicator.active .rec-dot {
+      background-color: var(--danger);
+      animation: pulse 1s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(0.8);
+        opacity: 0.3;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .silent-warning {
+      background-color: rgba(239, 68, 68, 0.2);
+      border: 1px solid var(--danger);
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: #fca5a5;
+      font-size: 0.88rem;
+      font-weight: 600;
+      display: none;
+    }
+
+    .silent-warning.visible {
+      display: block;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+    }
+
+    .stat-box {
+      background-color: #12151e;
+      border: 1px solid #23283a;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .stat-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      margin-top: 2px;
+    }
+
+    /* Audio Meter */
+    .audio-meter-panel {
+      background-color: #12151e;
+      border: 1px solid #23283a;
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .meter-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .meter-readout {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #6ee7b7;
+    }
+
+    .meter-track {
+      height: 14px;
+      background-color: #090a0f;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .meter-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10b981 0%, #10b981 70%, #f59e0b 85%, #ef4444 100%);
+      transition: width 0.06s ease-out;
+    }
+
+    /* Summary Card */
+    .summary-card {
+      background-color: var(--success-bg);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 8px;
+      padding: 14px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .summary-card.visible {
+      display: flex;
+    }
+
+    .summary-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #6ee7b7;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .summary-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #e2e8f0;
+    }
+
+    .summary-details code {
+      font-family: var(--font-mono);
+      background-color: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .summary-hint {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(16, 185, 129, 0.2);
+      padding-top: 6px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎙️ abi-ear — Gravador de Protótipo</h1>
+      <p>Captura tela a 10 fps (JPEG 0.95) e áudio do sistema (48 kHz mono). As gravações são salvas exclusivamente no seu computador em subpastas com carimbo <code>YYYY-MM-DD-HHMMSS</code>.</p>
+    </header>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="banner banner-error">
+      <span id="error-message"></span>
+      <button id="btn-close-error" class="banner-close" aria-label="Fechar">&times;</button>
+    </div>
+
+    <!-- Passo 1: Escolher pasta -->
+    <section id="step1-card" class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="step-number">1</span>
+          <span>Escolher pasta</span>
+        </div>
+        <span id="step1-badge" class="step-badge badge-pending">Pendente</span>
+      </div>
+      <div id="step1-status" class="card-state-text">
+        Nenhuma pasta selecionada. Escolha a pasta raiz onde as subpastas das gravações serão armazenadas.
+      </div>
+      <div class="btn-row">
+        <button id="btn-choose-folder" class="btn btn-primary">📁 Escolher pasta</button>
+      </div>
+    </section>
+
+    <!-- Passo 2: Compartilhar tela -->
+    <section id="step2-card" class="card disabled">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="step-number">2</span>
+          <span>Compartilhar tela</span>
+        </div>
+        <span id="step2-badge" class="step-badge badge-pending">Pendente</span>
+      </div>
+
+      <div class="instruction-callout">
+        <strong>Instruções para o diálogo do Chrome:</strong>
+        <ol>
+          <li>Selecione a aba <strong>"Tela inteira"</strong> (não escolha janela ou guia).</li>
+          <li>Escolha o <strong>monitor onde o jogo Arena Breakout: Infinite está aberto</strong>.</li>
+          <li>Marque a opção <strong>"Compartilhar áudio do sistema"</strong> no canto inferior.</li>
+        </ol>
+      </div>
+
+      <div id="step2-status" class="card-state-text">
+        Bloqueado: selecione uma pasta no Passo 1 primeiro.
+      </div>
+
+      <div id="stream-problems" class="problems-box">
+        <strong>Atenção: ajuste o compartilhamento de tela:</strong>
+        <ul id="problems-list"></ul>
+      </div>
+
+      <div class="btn-row">
+        <button id="btn-share-screen" class="btn btn-primary" disabled>🖥️ Compartilhar tela</button>
+        <button id="btn-share-again" class="btn btn-secondary" style="display: none;">🔄 Compartilhar novamente</button>
+      </div>
+
+      <div id="video-wrapper" class="video-preview-wrapper">
+        <video id="video-preview" autoplay muted playsinline></video>
+      </div>
+    </section>
+
+    <!-- Passo 3: Gravar / Parar -->
+    <section id="step3-card" class="card disabled">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="step-number">3</span>
+          <span>Gravar / Parar</span>
+        </div>
+        <span id="step3-badge" class="step-badge badge-pending">Pendente</span>
+      </div>
+
+      <div id="step3-status" class="card-state-text">
+        Bloqueado: complete os passos 1 e 2 para habilitar a gravação.
+      </div>
+
+      <div class="btn-row">
+        <button id="btn-record" class="btn btn-record" disabled>▶ Gravar</button>
+      </div>
+
+      <!-- Live recording & meter section -->
+      <div id="recording-section" class="recording-section">
+        <div class="rec-status-bar">
+          <div id="rec-indicator" class="rec-indicator">
+            <span class="rec-dot"></span>
+            <span id="rec-status-text">PARADO</span>
+          </div>
+          <div id="stat-subfolder" style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);"></div>
+        </div>
+
+        <div id="silent-warning" class="silent-warning">
+          ⚠️ Sem som chegando: confira o áudio do sistema no compartilhamento
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Tempo</div>
+            <div id="stat-elapsed" class="stat-value">00:00.0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Quadros</div>
+            <div id="stat-frames" class="stat-value">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Quadros pulados</div>
+            <div id="stat-skipped" class="stat-value">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Áudio</div>
+            <div id="stat-audio" class="stat-value">0.0 s</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Resolução</div>
+            <div id="stat-res" class="stat-value" style="font-size: 0.95rem;">-</div>
+          </div>
+        </div>
+
+        <div class="audio-meter-panel">
+          <div class="meter-label-row">
+            <span>Áudio do sistema (último segundo):</span>
+            <span id="meter-readout" class="meter-readout">RMS: 0.000 | Pico: 0.000</span>
+          </div>
+          <div class="meter-track">
+            <div id="meter-fill" class="meter-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary card after stopping -->
+      <div id="save-summary" class="summary-card">
+        <div class="summary-title">✅ Gravação salva com sucesso!</div>
+        <div class="summary-details">
+          <div>Subpasta: <code id="summary-subfolder">-</code></div>
+          <div>Duração: <span id="summary-duration">-</span></div>
+          <div>Quadros: <span id="summary-frames">-</span></div>
+          <div>Áudio: <span id="summary-audio">-</span></div>
+        </div>
+        <div class="summary-hint">
+          Arquivos salvos: <code>session.json</code>, <code>audio.wav</code> e pasta <code>frames/</code>. Você pode iniciar uma nova gravação quando desejar.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
