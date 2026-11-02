@@ -5,6 +5,10 @@ Plano: `docs/superpowers/plans/2026-11-02-risk-prototype.md` (Task 5). Spec: se�
 **Resumo:**
 - **Áudio: passou com folga.** A nota mediana dos sons capturados pelo Chrome é igual à do app (0,90 x 0,90).
 - **Imagem: não passou.** A atribuição pela caixa que some concorda com o cursor em 4% a 8% das pegadas, contra os 95% exigidos.
+- **Alternativa testada depois, com a mesma gravação: passou.** Achar a seta do mouse, que o Chrome desenha no
+  vídeo, deu a caixa certa em 50 de 50 pegadas, sem nenhuma errada, na cadência gravada (um quadro a cada 200 ms).
+  Os parâmetros foram ajustados nesta mesma gravação, então falta validar numa segunda. Veja a seção
+  "Teste da alternativa 1".
 
 Pela seção 10 da spec, a decisão volta ao autor antes da fase 2. As alternativas estão no fim deste documento.
 
@@ -163,3 +167,68 @@ O quadro é o "de antes", na pasta `frames/` da gravação. As coordenadas do cu
 pelo menos 95% das pegadas e a caixa sob ela concordar com o gabarito sem erros, a fase 2 segue com o cursor do
 vídeo no lugar da caixa sumida, a 3 ou 5 fps. Também vale reduzir a qualidade do JPEG ou gravar só a região do
 vendedor, se 10 fps vier a ser necessário.
+
+## Teste da alternativa 1: cursor desenhado no vídeo
+
+O autor aprovou o teste em 02/11. Ele usou a mesma gravação, sem gravar de novo.
+
+**Método:**
+- **Modelo da seta:** recorte de 14x17 px da seta branca com borda escura, tirado de um quadro desta gravação.
+- **Busca:** correlação normalizada (`cv2.matchTemplate`, `TM_CCOEFF_NORMED`) no quadro inteiro em tons de cinza. O
+  ponto do cursor é a ponta da seta.
+- **Quadro usado:** o mais recente na janela de 200 ms a 400 ms antes do som ouvido pelo Chrome.
+- **Atribuição:** a caixa que contém a célula da seta, no grid do vendedor lido pelo `scan` naquele quadro.
+- **Comparação com o gabarito:** por caixa, não por célula. Uma célula vizinha dentro da mesma caixa 2x2 é a mesma
+  pegada.
+  - As linhas do gabarito são linhas de conteúdo do app; na tela, elas ficam deslocadas pela rolagem.
+  - Para comparar, deduzi esse deslocamento das próprias pegadas do app: 0 enquanto o grid estava na fase y0=222 e 2
+    na fase y0=190. Todas as 50 pegadas são compatíveis com esse valor.
+  - Isso só serve para o teste. No produto, quem acompanha a rolagem é o modelo de sessão, como já faz o app.
+- **Scripts:** exploratórios, fora do repositório. Viram ferramenta com testes se a fase 2 seguir por este caminho.
+
+**Detecção e precisão:**
+- A seta foi achada em todos os quadros de 700 ms antes até 500 ms depois de cada som (cerca de 300 quadros), com
+  correlação de pelo menos 0,84 e mediana de 0,94 a 1,00.
+- Entre 200 ms e 400 ms antes do som, a ponta fica a no máximo 16 px do ponto do app em 96% a 100% das pegadas,
+  com mediana de 5,1 px. É um deslocamento constante de (+1, −5) px entre a ponta desenhada e o ponto do app.
+- A partir de 100 ms antes do som, a seta já se afastou (mediana de 34 a 68 px), porque o jogador está arrastando a
+  caixa. Isso confirma o que a caixa sumida já mostrava: o som chega uns 250 ms depois do clique, na escala de tempo
+  da gravação.
+
+**Atribuição por caixa:**
+
+| quadros usados                            | janela antes do som | concorda | errada | nenhuma        |
+|-------------------------------------------|---------------------|----------|--------|----------------|
+| todos (um a cada 200 ms)                  | 200 a 400 ms        | 50       | 0      | 0              |
+| todos                                     | 250 a 450 ms        | 50       | 0      | 0              |
+| todos                                     | 150 a 350 ms        | 49       | 1      | 0              |
+| reamostrados a 5 fps                      | 200 a 400 ms        | 37       | 0      | 13 (sem quadro)|
+| reamostrados a 3 fps                      | 200 a 533 ms        | 40       | 1      | 9 (sem quadro) |
+
+- Sem a correção de (+1, −5) px, o resultado é o mesmo: 50 de 50 com todos os quadros.
+- **Reamostrado a 5 fps:** a gravação já está em cerca de 5 fps, e reamostrá-la a 5 fps perde 1 quadro em 6 por
+  causa da variação nos intervalos. Por isso, 13 pegadas ficam sem quadro na janela. É um efeito da reamostragem.
+  Um gravador que entregue um quadro a cada 200 ms sempre tem um quadro na janela.
+- **A errada a 3 fps:** o quadro mais próximo estava 516 ms antes do som, com o cursor ainda chegando à caixa: 35 px
+  de distância, já na caixa de baixo.
+- **A errada com a janela de 150 ms:** o cursor já tinha começado a arrastar.
+- **Conclusão:** a janela de 200 ms a 400 ms, com folga dos dois lados, passa no critério com um quadro a cada
+  200 ms. A 3 fps não passa.
+
+**Ressalvas:**
+1. O modelo da seta, a janela e a correção foram escolhidos nesta mesma gravação. É preciso validar numa segunda
+   gravação, sem mudar nada, antes de dar o resultado como certo.
+2. O modelo vale para a seta padrão do Windows em escala de 100%. Outra escala, outro tamanho de cursor ou um cursor
+   desenhado pelo próprio jogo exigem modelo próprio ou outra técnica. Nesta sessão, o jogo usa o cursor do Windows.
+3. O atraso de uns 250 ms entre o clique e o som pode variar com o PC e a saída de áudio. Vale medi-lo em outra
+   máquina, ou calibrá-lo na própria página, porque é o mesmo deslocamento constante visto aqui.
+
+**Recomendação atualizada:**
+1. Fazer uma segunda gravação de validação, com o mesmo procedimento e pelo menos 40 pegadas, e rodar o mesmo teste
+   sem mudar os parâmetros.
+2. Se passar de novo, seguir para a fase 2 com o cursor do vídeo no lugar da caixa sumida (8.3):
+   - um quadro a cada 200 ms (5 Hz);
+   - o quadro mais recente entre 200 ms e 400 ms antes do som;
+   - a caixa sob a seta pelo modelo de sessão.
+
+   A seção 8.3 da spec e o plano da fase 2 precisam refletir essa troca.
