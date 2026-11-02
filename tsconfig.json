@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["spike"]
+  "include": ["spike", "src"]
 }
