@@ -55,7 +55,7 @@ describe.skipIf(!hasFixtures('frames', 'live_vendor_backpack.json'))('with the v
     expect([found!.geometry.cols, found!.geometry.rows]).toEqual([hint.cols, hint.rows])
   })
 
-  it('scans a 1080p frame in under 150 ms', () => {
+  it.skipIf(!!process.env.CI)('scans a 1080p frame in under 150 ms', () => {
     const gray = readGray('live_vendor_backpack')
     scan(gray) // aquece o JIT
     const t0 = performance.now()

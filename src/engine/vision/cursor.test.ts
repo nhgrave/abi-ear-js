@@ -47,7 +47,8 @@ describe('matchArrow speed and tracker', () => {
     return performance.now() - t
   }
 
-  it('matchArrow is fast enough', () => {
+  // tempo depende da máquina: na CI (runner compartilhado) não vale como critério
+  it.skipIf(!!process.env.CI)('matchArrow is fast enough', () => {
     const local = timeIt(() => matchArrow(g, [500 - 128, 400 - 128, 256 + ARROW.w, 256 + ARROW.h]))
     const whole = timeIt(() => matchArrow(g, [grid.x0 - 64, grid.y0 - 64, 13 * 64, 15 * 64]))
     console.log(`matchArrow local ${local.toFixed(1)} ms, grid ${whole.toFixed(1)} ms`)
