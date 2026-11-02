@@ -232,3 +232,27 @@ O autor aprovou o teste em 02/11. Ele usou a mesma gravação, sem gravar de nov
    - a caixa sob a seta pelo modelo de sessão.
 
    A seção 8.3 da spec e o plano da fase 2 precisam refletir essa troca.
+
+## Validação do cursor em duas gravações novas
+
+Mesmo teste, sem mudar o modelo da seta, a correção nem a janela. A única mudança é na rolagem: em vez da fase do
+grid deduzida na primeira gravação, vale qualquer rolagem que ponha o cursor registrado pelo app dentro da caixa, e a
+pegada só concorda se a seta cai na caixa em todas elas. Janela de 200 ms a 400 ms antes do som, todos os quadros
+(um a cada 200 ms):
+
+| Gravação | Pegadas do app | Concorda    | Errada | Ambígua | Sem quadro |
+|----------|----------------|-------------|--------|---------|------------|
+| 160053   | 65             | 62 (95%)    | 1      | 0       | 2          |
+| 155614   | 21             | 15 (71%)    | 2      | 4       | 0          |
+
+- **160053, visita normal ao vendedor:** passa no critério de 95%. A errada é um 2x2 em que a seta estava 90 px abaixo
+  do cursor registrado pelo app, 342 ms antes do som.
+- **155614, pega e devolve em sequência:** é a mesma caixa pega duas ou três vezes seguidas, com arrastes curtos. Nos
+  quadros vizinhos, a seta salta de 40 a 130 px entre um quadro e o seguinte, então um quadro a cada 200 ms não
+  basta para saber onde estava o clique. Em 6 das 21 pegadas, o app registrou a pegada sem que o som aparecesse na
+  gravação.
+- **Conclusão:** em uso normal, o cursor do vídeo funciona. Com o mouse rápido, 5 Hz não basta. Para a fase 2:
+  - **Taxa:** o limite de 5 Hz vinha do JPEG do gravador. A página ao vivo não grava JPEG e pode procurar a seta só
+    perto da posição anterior, a 10 Hz ou mais.
+  - **Honestidade:** se a seta não estiver parada na mesma caixa em dois quadros seguidos dentro da janela, a caixa
+    mostra "?" em vez de chutar.
