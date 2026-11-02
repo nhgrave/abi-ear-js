@@ -13,7 +13,6 @@ const BLACK_WINDOW_MS = 2000
 const VENDOR_FRESH_MS = 1500 // o mesmo MAX_LAYOUT_AGE do controller
 const WRONG_SCREEN_MS = 30_000
 const ARROW_FRESH_MS = 2000
-const ARROW_MISSING_MS = 5000
 
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b)
@@ -21,7 +20,8 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
 
-export function audioHealth(s: { hasTrack: boolean; lastChunkMs: number | null; now: number; scores: number[]; nearMisses: number[] }): Health {
+export function audioHealth(s: { sharing: boolean; hasTrack: boolean; lastChunkMs: number | null; now: number; scores: number[]; nearMisses: number[] }): Health {
+  if (!s.sharing) return { level: 'gray', reason: 'screen.off' }
   if (!s.hasTrack) return { level: 'red', reason: 'audio.noTrack' }
   if (s.lastChunkMs === null || s.now - s.lastChunkMs > AUDIO_SILENT_MS) return { level: 'red', reason: 'audio.stalled' }
   const recent = s.scores.slice(-LAST_SCORES)
@@ -47,11 +47,13 @@ export function vendorHealth(s: { lastSeen: number | null; now: number; sharingS
   return { level: 'gray', reason: 'vendor.none' }
 }
 
-/** vendorSinceMs: desde quando o vendedor está visível (para contar a ausência da seta quando ela nunca apareceu). */
-export function cursorHealth(s: { vendorVisible: boolean; lastArrowMs: number | null; now: number; vendorSinceMs?: number | null }): Health {
+const NO_CURSOR_RECENT_MS = 30_000 // pegada recente que não achou o cursor: o aviso vale
+
+/** A seta só é procurada perto do grid do vendedor: ela sumir é normal (o mouse está em outro lugar). O aviso
+ * aparece quando uma pegada recente não achou o cursor (lastNoCursorMs) e a seta continua sumida. */
+export function cursorHealth(s: { vendorVisible: boolean; lastArrowMs: number | null; now: number; lastNoCursorMs: number | null }): Health {
   if (!s.vendorVisible) return { level: 'gray', reason: 'cursor.idle' }
   if (s.lastArrowMs !== null && s.now - s.lastArrowMs <= ARROW_FRESH_MS) return { level: 'green', reason: 'cursor.ok' }
-  const since = s.lastArrowMs ?? s.vendorSinceMs ?? null
-  if (since !== null && s.now - since > ARROW_MISSING_MS) return { level: 'yellow', reason: 'cursor.missing' }
+  if (s.lastNoCursorMs !== null && s.now - s.lastNoCursorMs <= NO_CURSOR_RECENT_MS) return { level: 'yellow', reason: 'cursor.missing' }
   return { level: 'gray', reason: 'cursor.idle' }
 }

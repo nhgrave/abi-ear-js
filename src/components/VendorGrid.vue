@@ -8,6 +8,7 @@ const emit = defineEmits<{ select: [number] }>()
 const CELL = 48
 const scroller = ref<HTMLElement | null>(null)
 
+const shown = computed(() => props.view.boxes.map((b) => ({ b, d: boxDisplay(b) })))
 const cols = computed(() => props.view.geometry?.cols ?? 9)
 const first = computed(() => props.view.extent[0])
 const rows = computed(() => Math.max(1, props.view.extent[1] - props.view.extent[0]))
@@ -27,16 +28,16 @@ watch(() => props.view.rowOffset, async () => {
     <div class="grid" :style="{ width: `${cols * CELL}px`, height: `${rows * CELL}px`, backgroundSize: `${CELL}px ${CELL}px` }">
       <div v-if="band" class="band" :style="{ top: `${band.top}px`, height: `${band.height}px` }" />
       <button
-        v-for="b in view.boxes"
+        v-for="{ b, d } in shown"
         :key="b.uid"
-        :class="['box', boxDisplay(b).tone, { selected: b.uid === selected }]"
+        :class="['box', d.tone, { selected: b.uid === selected }]"
         :style="{ left: `${b.col * CELL}px`, top: `${(b.row - first) * CELL}px`, width: `${b.w * CELL}px`, height: `${b.h * CELL}px` }"
         @click="emit('select', b.uid)"
       >
-        <img v-if="boxDisplay(b).icon" :src="boxDisplay(b).icon!" :alt="boxDisplay(b).text" />
+        <img v-if="d.icon" :src="d.icon" :alt="d.text" />
         <template v-else>
-          <span class="name">{{ boxDisplay(b).text }}</span>
-          <span v-if="boxDisplay(b).pct !== null" class="pct">{{ boxDisplay(b).pct }}%</span>
+          <span class="name">{{ d.text }}</span>
+          <span v-if="d.pct !== null" class="pct">{{ d.pct }}%</span>
         </template>
       </button>
     </div>

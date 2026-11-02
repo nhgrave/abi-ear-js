@@ -28,10 +28,11 @@ export function audioTimeMs(frame: number, ts: { contextTime: number; performanc
   return ts.performanceTime + (frame / SAMPLE_RATE - ts.contextTime) * 1000
 }
 
+/** Par (contextTime, performanceTime) do AudioContext. Antes de a saída começar, o Chrome devolve zeros: aí vale o
+ * relógio atual, como no gravador. */
 export function outputTimestamp(ctx: AudioContext): { contextTime: number; performanceTime: number } {
   const ts = ctx.getOutputTimestamp()
-  return {
-    contextTime: typeof ts.contextTime === 'number' && !Number.isNaN(ts.contextTime) ? ts.contextTime : ctx.currentTime,
-    performanceTime: typeof ts.performanceTime === 'number' && !Number.isNaN(ts.performanceTime) ? ts.performanceTime : performance.now(),
-  }
+  const ok = (v: number | undefined): v is number => typeof v === 'number' && !Number.isNaN(v) && v > 0
+  if (ok(ts.contextTime) && ok(ts.performanceTime)) return { contextTime: ts.contextTime, performanceTime: ts.performanceTime }
+  return { contextTime: ctx.currentTime, performanceTime: performance.now() }
 }

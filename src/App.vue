@@ -47,7 +47,7 @@ onMounted(() => {
       <div class="controls">
         <Indicators :health="s.health" :locale="locale" />
         <ProfileSelect :options="options" :model-value="s.profileId" :locale="locale" @update:model-value="rt.setProfile" />
-        <button v-if="!s.sharing" class="primary" :disabled="s.loading" @click="rt.start">{{ t('start', locale) }}</button>
+        <button v-if="!s.sharing" class="primary" :disabled="!s.ready || s.starting" @click="rt.start">{{ t('start', locale) }}</button>
         <button v-else @click="rt.stop">{{ t('stop', locale) }}</button>
         <button @click="rt.clear(); selected = null">{{ t('clear', locale) }}</button>
         <select class="lang" :value="locale" :aria-label="t('language', locale)" @change="setLocale(($event.target as HTMLSelectElement).value as Locale)">
