@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { t, type Locale } from '../i18n'
 import type { BoxView } from '../engine/view'
+import { RARITY_COLORS } from '../view/format'
 
 defineProps<{ box: BoxView; locale: Locale }>()
 </script>
@@ -15,9 +16,9 @@ defineProps<{ box: BoxView; locale: Locale }>()
       <p v-if="box.sizeRelaxed" class="note">{{ t('panel.sizeRelaxed', locale) }}</p>
       <ul>
         <li v-for="c in box.candidates" :key="c.itemId">
-          <img v-if="c.icon" :src="c.icon" alt="" />
+          <img v-if="c.icon" :src="c.icon" alt="" :style="{ borderColor: RARITY_COLORS[c.rarity] ?? '#5a5a5a' }" />
           <span class="label">{{ c.name }}</span>
-          <span class="bar"><span :style="{ width: `${c.pct}%` }" /></span>
+          <span class="bar"><span :style="{ width: `${c.pct}%`, background: RARITY_COLORS[c.rarity] ?? '#5a5a5a' }" /></span>
           <span class="pct">{{ c.pct < 1 ? '<1' : Math.round(c.pct) }}%</span>
         </li>
       </ul>
@@ -31,8 +32,8 @@ h2 { font-size: 16px; margin: 0 0 4px; }
 .meta, .note { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 li { display: grid; grid-template-columns: 28px 1fr 80px 40px; align-items: center; gap: 8px; font-size: 13px; }
-img { width: 28px; height: 28px; object-fit: contain; }
+img { width: 28px; height: 28px; object-fit: contain; border: 1px solid; border-radius: 4px; background: #14161b; }
 .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
-.bar span { display: block; height: 100%; background: var(--accent); }
+.bar span { display: block; height: 100%; }
 .pct { text-align: right; font-variant-numeric: tabular-nums; }
 </style>

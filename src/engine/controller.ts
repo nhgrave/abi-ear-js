@@ -25,10 +25,22 @@ export class Controller {
   vendorVisible = false
   lastArrowMs: number | null = null
   private history = new CursorHistory()
-  private sizes: Set<string>
+  private sizes: [number, number][]
 
   constructor(public ds: Dataset) {
-    this.sizes = new Set([...ds.items.values()].map((it) => [...it.size].sort((a, b) => a - b).join('x')))
+    const seen = new Set<string>()
+    this.sizes = []
+    for (const it of ds.items.values()) {
+      for (const [w, h] of [it.size, [it.size[1], it.size[0]] as [number, number]]) {
+        if (!seen.has(`${w}x${h}`)) seen.add(`${w}x${h}`) && this.sizes.push([w, h])
+      }
+    }
+  }
+
+  /** Algum item cabe: inteira, com o tamanho exato (girado ou não); cortada na borda de cima ou de baixo, com a
+   * mesma largura e altura de pelo menos a parte visível. */
+  private possible(b: { w: number; h: number; clipped: boolean }): boolean {
+    return this.sizes.some(([w, h]) => w === b.w && (b.clipped ? h >= b.h : h === b.h))
   }
 
   profiles(): number[] {
@@ -98,6 +110,7 @@ export class Controller {
           itemId: c.item.id,
           name: c.item.name,
           pct: c.pct,
+          rarity: c.item.rarity,
           icon: c.item.iconUrl ? `data/icons/${Math.trunc(c.item.id)}.png` : null,
         })),
       })),
@@ -115,9 +128,10 @@ export class Controller {
     return Math.abs(scan.geometry.pitch - geom.pitch) > OTHER_PITCH * geom.pitch
   }
 
-  /** Retângulo inteiro com tamanho que nenhum item tem = algo cobre o grid: vira célula incerta. */
+  /** Caixa com tamanho que nenhum item tem = algo cobre o grid (ou células vazias juntadas na borda): vira célula
+   * incerta. O Python só olha as caixas inteiras; aqui as cortadas também, pela largura, que o corte não muda. */
   private plausible(scan: GridScan): GridScan {
-    const bad = scan.boxes.filter((b) => this.sizes.size > 0 && !b.clipped && !this.sizes.has([b.w, b.h].sort((x, y) => x - y).join('x')))
+    const bad = scan.boxes.filter((b) => this.sizes.length > 0 && !this.possible(b))
     if (bad.length === 0) return scan
     const uncertain = new Set(scan.uncertain)
     for (const b of bad) for (const [c, r] of boxCells(b)) uncertain.add(cellKey(c, r))

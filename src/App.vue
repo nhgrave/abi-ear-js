@@ -76,7 +76,7 @@ onMounted(() => {
 :root {
   --bg: #0f1115; --panel: #171a21; --text: #e6e8ec; --muted: #9aa1ad; --line: #2a2f3a; --accent: #e3893b;
   --green: #4caf6a; --yellow: #d9b33b; --red: #d9534f; --gray: #5b6270;
-  --box: #20242d; --box-line: #3a404c; --sure: #1f3a29; --doubt: #3a3420; --band: rgba(227, 137, 59, 0.08);
+  --box: #20242d; --box-line: #3a404c; --band: rgba(227, 137, 59, 0.08);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }

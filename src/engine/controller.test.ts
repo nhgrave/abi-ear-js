@@ -121,12 +121,19 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
     expect(c.session.boxes.get('7,1')!.picks).toBe(1)
   })
 
+  it('clipped box wider than any item is not a box', () => {
+    // a última linha visível, cortada, juntava células vazias em caixas impossíveis (5x2, 9x2) no grid espelhado
+    c.onFrame(frame(1_000, grid([rect(7, 1, 1, 2), rect(4, 5, 5, 1, true), rect(0, 5, 3, 1, true)])))
+    expect([...c.session.boxes.keys()].sort()).toEqual(['0,5', '7,1'])
+  })
+
   it('view lists boxes with candidates and icons', () => {
     pickAt(99_000, ON_7_1)
     const v = c.view()
     const b = v.boxes.find((x) => x.col === 7 && x.row === 1)!
     expect(b.picks).toBe(1)
     expect(b.candidates[0].icon).toMatch(/^data\/icons\/\d+\.png$/)
+    expect(b.candidates[0].rarity).toBeGreaterThanOrEqual(1)
     expect(v.geometry).toEqual(GEOM)
   })
 })

@@ -30,15 +30,26 @@ watch(() => props.view.rowOffset, async () => {
       <button
         v-for="{ b, d } in shown"
         :key="b.uid"
-        :class="['box', d.tone, { selected: b.uid === selected }]"
-        :style="{ left: `${b.col * CELL}px`, top: `${(b.row - first) * CELL}px`, width: `${b.w * CELL}px`, height: `${b.h * CELL}px` }"
+        :class="['box', { picked: d.color, selected: b.uid === selected, clipped: b.clipped }]"
+        :style="{
+          left: `${b.col * CELL}px`,
+          top: `${(b.row - first) * CELL}px`,
+          width: `${b.w * CELL}px`,
+          height: `${b.h * CELL}px`,
+          '--rarity': d.color ?? undefined,
+        }"
+        :title="d.pct !== null ? `${d.text} ${d.pct}%` : d.text"
         @click="emit('select', b.uid)"
       >
-        <img v-if="d.icon" :src="d.icon" :alt="d.text" />
+        <template v-if="d.icon">
+          <img :src="d.icon" :alt="d.text" />
+          <span class="caption">{{ d.text }}</span>
+        </template>
         <template v-else>
           <span class="name">{{ d.text }}</span>
           <span v-if="d.pct !== null" class="pct">{{ d.pct }}%</span>
         </template>
+        <span v-if="d.count > 1" class="badge">⧉ {{ d.count }}</span>
       </button>
     </div>
   </div>
@@ -48,11 +59,13 @@ watch(() => props.view.rowOffset, async () => {
 .scroller { max-height: 70vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); max-width: 100%; }
 .grid { position: relative; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); }
 .band { position: absolute; left: 0; right: 0; background: var(--band); pointer-events: none; }
-.box { position: absolute; box-sizing: border-box; border: 1px solid var(--box-line); background: var(--box); color: var(--text); border-radius: 4px; padding: 2px; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; font: inherit; font-size: 11px; line-height: 1.15; cursor: pointer; text-align: center; }
-.box.sure { background: var(--sure); border-color: var(--green); }
-.box.doubt { background: var(--doubt); border-color: var(--yellow); }
-.box.selected { outline: 2px solid var(--accent); z-index: 1; }
-.box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.box { position: absolute; --rarity: transparent; box-sizing: border-box; border: 1px solid var(--box-line); background: var(--box); color: var(--text); border-radius: 4px; padding: 2px; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; font: inherit; font-size: 11px; line-height: 1.15; cursor: pointer; text-align: center; }
+.box.picked { background: color-mix(in srgb, var(--rarity) 42%, #14161b); border: 2px solid var(--rarity); }
+.box.clipped { border-style: dashed; }
+.box.selected { outline: 2px solid #fff; z-index: 1; }
+.box img { flex: 1 1 auto; min-height: 0; max-width: 100%; object-fit: contain; }
+.caption { font-size: 10px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { position: absolute; right: 3px; bottom: 2px; font-size: 10px; font-weight: 700; color: #ffd54f; }
 .pct { font-weight: 700; }
 .name { overflow-wrap: anywhere; }
 </style>
