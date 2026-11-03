@@ -2,7 +2,7 @@
  *
  * ABI_LABEL_BUILD=<pastas de gravação, separadas por vírgula> ABI_APP_LOG=<abi-ear.log> ABI_LABEL_OUT=<arquivo.json> \
  *   npx vitest run src/engine/label-models.build.test.ts
- * Opcional: ABI_LABEL_MIN_SCORE e ABI_LABEL_MARGIN (limiares gravados no arquivo).
+ * Opcional: ABI_LABEL_MIN_SCORE e ABI_LABEL_MARGIN (limiares gravados no arquivo; padrão 0,5 e 0,15, da medição de 02/11).
  *
  * Medidas na gravação 160053 (quadro 1793646113337): texto do rótulo com cinza ~195, ícone da caixa até ~44, fundo
  * ~17. TEXT_LEVEL fica perto do ponto médio, um pouco abaixo por causa da borda suavizada das letras. Recortes de 1x1,
@@ -75,8 +75,8 @@ describe.skipIf(!DIRS || !LOG || !OUT)('label models', () => {
     const models: LabelModels = {
       version: 1,
       textLevel: TEXT_LEVEL,
-      minScore: Number(process.env.ABI_LABEL_MIN_SCORE ?? 0.6),
-      margin: Number(process.env.ABI_LABEL_MARGIN ?? 0.1),
+      minScore: Number(process.env.ABI_LABEL_MIN_SCORE ?? 0.5),
+      margin: Number(process.env.ABI_LABEL_MARGIN ?? 0.15),
       models: [...samples.values()].sort((a, b) => a.w - b.w || (a.label < b.label ? -1 : 1)).map((s) => buildModel(s.label, s.w, s.masks)),
     }
     const json = JSON.stringify(models)
