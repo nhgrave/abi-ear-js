@@ -95,4 +95,12 @@ describe('wav', () => {
     w.append(new Float32Array([2]))
     await expect(w.finish()).rejects.toThrow('write 1 failed')
   })
+
+  it('exposes the first write error before finish', async () => {
+    const w = new WavWriter(fakeSink({ fail: (i) => i === 1 }))
+    expect(w.error).toBeNull()
+    w.append(new Float32Array([1]))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(String(w.error)).toContain('write 1 failed')
+  })
 })

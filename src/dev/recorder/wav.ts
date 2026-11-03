@@ -38,7 +38,7 @@ export function wavHeader(dataBytes: number, sampleRate = SAMPLE_RATE): ArrayBuf
  * corrige os tamanhos no cabeçalho e fecha. O primeiro erro de escrita rejeita o `finish`. */
 export class WavWriter {
   private queue: Promise<void>
-  private error: unknown = null
+  private failure: unknown = null
   private count = 0
 
   constructor(
@@ -53,6 +53,11 @@ export class WavWriter {
     return this.count
   }
 
+  /** O primeiro erro de escrita, assim que acontece (null enquanto tudo vai bem). */
+  get error(): unknown {
+    return this.failure
+  }
+
   append(samples: Float32Array): void {
     if (samples.length === 0) return
     const position = HEADER_BYTES + this.count * BYTES_PER_SAMPLE
@@ -63,9 +68,9 @@ export class WavWriter {
   async finish(): Promise<number> {
     this.enqueue(0, wavHeader(this.count * BYTES_PER_SAMPLE, this.sampleRate))
     await this.queue
-    if (this.error !== null) {
+    if (this.failure !== null) {
       await this.sink.close().catch(() => {}) // fecha o que der; o erro que vale é o da escrita
-      throw this.error
+      throw this.failure
     }
     await this.sink.close()
     return this.count
@@ -73,11 +78,11 @@ export class WavWriter {
 
   private enqueue(position: number, data: ArrayBuffer): void {
     this.queue = this.queue.then(async () => {
-      if (this.error !== null) return // depois do primeiro erro, nada mais é escrito
+      if (this.failure !== null) return // depois do primeiro erro, nada mais é escrito
       try {
         await this.sink.write({ type: 'write', position, data })
       } catch (err) {
-        this.error = err
+        this.failure = err
       }
     })
   }

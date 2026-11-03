@@ -322,7 +322,10 @@ export function createRuntime() {
     refresh()
   }
 
-  return { state, load, start, stop, setProfile, clear, dataset: () => ds }
+  /** O stream compartilhado agora (o gravador do modo local usa o mesmo). */
+  const stream = (): MediaStream | null => live?.stream ?? null
+
+  return { state, load, start, stop, setProfile, clear, dataset: () => ds, stream }
 }
 
 export type Runtime = ReturnType<typeof createRuntime>
