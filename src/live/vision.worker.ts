@@ -5,10 +5,11 @@ import { rgbaToGray } from '../engine/vision/image'
 import type { GridGeometry } from '../engine/vision/types'
 import type { VisionIn, VisionOut } from './protocol'
 
-const pipeline = new FramePipeline()
+let pipeline = new FramePipeline()
 let canvas: OffscreenCanvas | null = null
 let ctx: OffscreenCanvasRenderingContext2D | null = null
 let hint: GridGeometry | null = null
+let labeled: ReadonlySet<string> = new Set()
 const post = (m: VisionOut) => (self as unknown as Worker).postMessage(m)
 
 function analyse(source: CanvasImageSource, w: number, h: number, t: number): void {
@@ -18,7 +19,7 @@ function analyse(source: CanvasImageSource, w: number, h: number, t: number): vo
   }
   ctx!.drawImage(source, 0, 0)
   const gray = rgbaToGray(ctx!.getImageData(0, 0, w, h).data, w, h)
-  post({ type: 'result', result: pipeline.process(gray, t, hint), size: [w, h] })
+  post({ type: 'result', result: pipeline.process(gray, t, hint, labeled), size: [w, h] })
 }
 
 async function readStream(readable: ReadableStream<VideoFrame>, originMs: number, intervalMs: number): Promise<void> {
@@ -43,7 +44,10 @@ async function readStream(readable: ReadableStream<VideoFrame>, originMs: number
 
 self.onmessage = (e: MessageEvent<VisionIn>) => {
   const m = e.data
-  if (m.type === 'hint') hint = m.hint
+  if (m.type === 'hint') {
+    hint = m.hint
+    labeled = new Set(m.labeled)
+  } else if (m.type === 'models') pipeline = new FramePipeline(m.models)
   else if (m.type === 'stream') void readStream(m.readable, m.originMs, m.intervalMs)
   else if (m.type === 'frame') {
     try {

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { Dataset } from './data/dataset'
-import { allProfileIds, profileOptions, profilesForLabels } from './profiles'
+import { allProfileIds, parseProfileChoice, profileChoiceValue, profileOptions, profilesForLabels, type ProfileChoice } from './profiles'
 import { fixturePath, hasFixtures, readJson } from '../test-utils/fixtures'
 
 describe.skipIf(!hasFixtures('merchant.json'))('profiles', () => {
@@ -54,5 +54,25 @@ describe('profilesForLabels without fixtures', () => {
     expect(profilesForLabels(tiny, [])).toEqual([1, 2])
     expect(profilesForLabels(tiny, ['Rare Collectibles'])).toEqual([1, 2])
     expect(profilesForLabels(tiny, ['Tools'])).toEqual([2])
+  })
+})
+
+describe.skipIf(!hasFixtures('merchant.json'))('profile choice', () => {
+  let ds: Dataset
+  beforeAll(() => {
+    ds = new Dataset(readJson(fixturePath('merchant.json')))
+  })
+
+  it('saved_profile_choice_from_v0_1_is_kept', () => {
+    expect(parseProfileChoice('all', ds)).toBe('all')
+    expect(parseProfileChoice('5', ds)).toBe(5)
+    expect(parseProfileChoice(null, ds)).toBe('auto')
+    expect(parseProfileChoice('auto', ds)).toBe('auto')
+    expect(parseProfileChoice('999', ds)).toBe('auto') // perfil que a base não tem mais
+    expect(parseProfileChoice('xyz', ds)).toBe('auto')
+  })
+
+  it('profile_choice_round_trips', () => {
+    for (const c of ['auto', 'all', 5] as ProfileChoice[]) expect(parseProfileChoice(profileChoiceValue(c), ds)).toBe(c)
   })
 })
