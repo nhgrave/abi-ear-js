@@ -27,7 +27,8 @@ link, share your entire screen with system audio, pick the map and mode, and dra
 ## Requisitos
 
 - Chrome ou Edge no Windows. Só eles capturam o áudio do sistema.
-- Compartilhar a **tela inteira**, com "Compartilhar áudio do sistema" marcado.
+- Compartilhar a **tela inteira**, com "Compartilhar áudio do sistema" marcado. Se o Chrome oferecer o áudio da
+  janela, dá para compartilhar só a **janela do jogo**: aí o som do Discord e de outros programas fica de fora.
 - Jogo em janela ou em tela cheia sem borda. Tela cheia exclusiva chega preta.
 - Cursor padrão do Windows, com escala de 100%.
 - Só 1920×1080 foi testado.
