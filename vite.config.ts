@@ -6,7 +6,7 @@ export default defineConfig({
   base: './',
   plugins: [vue()],
   test: {
-    exclude: [...configDefaults.exclude, '.claude/**'],
+    exclude: [...configDefaults.exclude, '.claude/**', '.houston/**'],
   },
   build: {
     outDir: 'dist',
