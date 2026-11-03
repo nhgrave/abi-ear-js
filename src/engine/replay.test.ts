@@ -79,6 +79,7 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
         const res = !box ? 'sem caixa' : box.label === null ? 'sem categoria' : box.label === p.label ? 'coberta' : 'errada'
         cats[res]++
         if (res === 'errada') wrongCats.push(`${new Date(p.t).toISOString()} ${p.key} ${p.size}: app ${p.label}, nós ${box!.label}`)
+        if (res === 'sem categoria') wrongCats.push(`${new Date(p.t).toISOString()} ${p.key} ${p.size}: app ${p.label}, nós sem categoria (${box!.w}x${box!.h})`)
       }
     }
 
