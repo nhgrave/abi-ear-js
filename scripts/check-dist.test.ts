@@ -11,4 +11,9 @@ it('flags recorder or spike in a path', () => {
   expect(findLeaks([{ path: 'spike/recorder/index.html', text: '' }]).length).toBeGreaterThan(0)
 })
 
-it('passes clean files', () => expect(findLeaks([{ path: 'assets/app-1.js', text: 'vendor grid' }])).toEqual([]))
+it('ignores recorder in game data paths (the game has a "Portable Recorder" item)', () => {
+  expect(findLeaks([{ path: 'data/icons/portable-recorder.png', text: '' }])).toEqual([])
+  expect(findLeaks([{ path: 'data/merchant.json', text: 'showDirectoryPicker' }])).toEqual(['data/merchant.json: showDirectoryPicker'])
+})
+
+it('passes clean files',() => expect(findLeaks([{ path: 'assets/app-1.js', text: 'vendor grid' }])).toEqual([]))

@@ -12,12 +12,14 @@ export const RECORDER_MARKERS = [
 
 const PATH_MARKERS = ['recorder', 'spike']
 
-/** Procura sinais do gravador em caminhos e no conteúdo dos arquivos. */
+/** Procura sinais do gravador em caminhos e no conteúdo dos arquivos. Os nomes em `data/` (base, sons e ícones do
+ * jogo) ficam fora da busca por caminho: o jogo tem um item "Portable Recorder". */
 export function findLeaks(files) {
   const leaks = []
   for (const file of files) {
+    const gameData = file.path.startsWith('data/')
     for (const marker of PATH_MARKERS) {
-      if (file.path.includes(marker)) leaks.push(`${file.path}: ${marker}`)
+      if (!gameData && file.path.includes(marker)) leaks.push(`${file.path}: ${marker}`)
     }
     for (const marker of RECORDER_MARKERS) {
       if (file.text.includes(marker)) leaks.push(`${file.path}: ${marker}`)
