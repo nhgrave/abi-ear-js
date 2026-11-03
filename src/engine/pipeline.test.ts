@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FramePipeline, SCAN_INTERVAL_MS, scanVendor } from './pipeline'
 import { hasFixtures, readGray, fixturePath, readJson } from '../test-utils/fixtures'
 import type { GridGeometry } from './vision/types'
+import type { LabelModels } from './vision/label-reader'
 
 describe.skipIf(!hasFixtures('frames', 'live_vendor_backpack.json'))('pipeline', () => {
   it('vendor search stays in the right half', () => {
@@ -29,5 +30,17 @@ describe.skipIf(!hasFixtures('frames', 'live_vendor_backpack.json'))('pipeline',
     expect(results.map((r) => r.scan !== undefined)).toEqual([true, false, false, false, true, false])
     expect(SCAN_INTERVAL_MS).toBe(350)
     expect(results.every((r) => r.mean > 0 && 'cursor' in r)).toBe(true)
+  })
+
+  it('labels_come_with_the_scan', () => {
+    const gray = readGray('live_vendor_backpack')
+    const models: LabelModels = { version: 1, textLevel: 110, minScore: 0.6, margin: 0.1, models: [] }
+    const p = new FramePipeline(models)
+    const results = [0, 100, 350].map((t) => p.process(gray, t, null))
+    expect(results.map((r) => r.labels.length > 0)).toEqual([true, false, true])
+    expect(results[0].labels.some((r) => r.hasText)).toBe(true)
+    const known = new Set(results[0].labels.map((r) => `${r.col},${r.row},${r.w},${r.h}`))
+    expect(p.process(gray, 700, null, known).labels).toEqual([])
+    expect(new FramePipeline().process(gray, 0, null).labels).toEqual([])
   })
 })

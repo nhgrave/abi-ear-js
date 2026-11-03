@@ -2,7 +2,8 @@
  *
  * ABI_REPLAY=<pasta da gravação> ABI_APP_LOG=<abi-ear.log> npx vitest run src/engine/replay.test.ts
  * Opcional: ABI_REPLAY_STRICT=0 só imprime a tabela, sem exigir o critério (gravações de pega e devolve);
- * ABI_REPLAY_OUT=<arquivo> grava a tabela (o vitest esconde o console de testes que passam).
+ * ABI_REPLAY_OUT=<arquivo> grava a tabela (o vitest esconde o console de testes que passam);
+ * ABI_LABEL_MODELS=<arquivo> lê os rótulos com esses modelos e conta a categoria de cada pegada do log que tem uma.
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -14,31 +15,17 @@ import { Controller, type PickupOutcome } from './controller'
 import { Dataset } from './data/dataset'
 import { FramePipeline } from './pipeline'
 import { rgbaToGray } from './vision/image'
+import type { LabelModels } from './vision/label-reader'
 import { fixturePath, readF32, readJson } from '../test-utils/fixtures'
+import { parseAppPicks, type AppPick } from '../test-utils/app-log'
 
 const DIR = process.env.ABI_REPLAY
 const LOG = process.env.ABI_APP_LOG
+const MODELS = process.env.ABI_LABEL_MODELS
 const STRICT = process.env.ABI_REPLAY_STRICT !== '0'
 const APP_CLOCK_MS = 85 // o som na gravação chega cerca de 85 ms depois do horário que o app registra
 const NEAR_MS = 500 // pegada ouvida a até isto da pegada do app (como tools/spike_eval.py)
 const BLOCK = 4096
-
-type AppPick = { t: number; x: number; y: number; key: string; size: string }
-
-/** Linhas "pegada às" do log do app (hora local), como parse_app_picks de tools/spike_eval.py. */
-function parseAppPicks(text: string): AppPick[] {
-  const re = /^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d),(\d{3}) INFO abi_ear\.controller: pegada às (\d\d:\d\d:\d\d\.\d{3}) em \((-?\d+), (-?\d+)\): caixa \((-?\d+), (-?\d+)\) (\S+)/gm
-  const seen = new Map<string, AppPick>()
-  for (const m of text.matchAll(re)) {
-    const logged = new Date(`${m[1]}T${m[2]}.${m[3]}`).getTime()
-    let at = new Date(`${m[1]}T${m[4]}`).getTime()
-    if (at > logged + 3600_000) at -= 86_400_000 // som antes da meia-noite, linha escrita depois
-    const p = { t: at, x: Number(m[5]), y: Number(m[6]), key: `${m[7]},${m[8]}`, size: m[9] }
-    const id = `${p.t}|${p.x}|${p.y}`
-    if (!seen.has(id)) seen.set(id, p)
-  }
-  return [...seen.values()]
-}
 
 function readWavF32(path: string): Float32Array {
   const buf = readFileSync(path)
@@ -72,13 +59,28 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
     const listener = new Listener(matcher)
     const controller = new Controller(ds)
     controller.setProfile('auto') // o padrão da página
-    const pipeline = new FramePipeline()
+    const pipeline = new FramePipeline(MODELS ? readJson<LabelModels>(MODELS) : null)
     const picks = parseAppPicks(readFileSync(LOG!, 'latin1')).filter((p) => p.t >= frames[0].t && p.t <= frames[frames.length - 1].t)
     const counts: Record<string, number> = {}
     const wrong: string[] = []
     const matched = new Set<AppPick>()
     let heardTotal = 0
     const tally = (res: string) => (counts[res] = (counts[res] ?? 0) + 1)
+    // categoria da caixa da pegada, no instante dela, contra a que o app tinha (só pegadas do log com categoria)
+    const labeledPicks = picks.filter((p) => p.label !== null)
+    const cats: Record<string, number> = { coberta: 0, errada: 0, 'sem categoria': 0, 'sem caixa': 0 }
+    const wrongCats: string[] = []
+    const labelMs: number[] = []
+    let li = 0
+    const judgeLabels = (now: number) => {
+      for (; li < labeledPicks.length && labeledPicks[li].t + APP_CLOCK_MS <= now; li++) {
+        const p = labeledPicks[li]
+        const box = controller.session.boxAtScreen(p.x, p.y)
+        const res = !box ? 'sem caixa' : box.label === null ? 'sem categoria' : box.label === p.label ? 'coberta' : 'errada'
+        cats[res]++
+        if (res === 'errada') wrongCats.push(`${new Date(p.t).toISOString()} ${p.key} ${p.size}: app ${p.label}, nós ${box!.label}`)
+      }
+    }
 
     /** Avalia a pegada na hora, com a sessão como estava: a caixa sob o cursor do app é o gabarito. */
     const judge = (out: PickupOutcome) => {
@@ -105,7 +107,10 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
       while (fi < frames.length && frames[fi].t <= tStart) {
         const img = decode(readFileSync(frames[fi].path), { useTArray: true, formatAsRGBA: true })
         const gray = rgbaToGray(img.data as unknown as Uint8ClampedArray, img.width, img.height)
-        controller.onFrame(pipeline.process(gray, frames[fi].t, controller.hint()))
+        const r = pipeline.process(gray, frames[fi].t, controller.hint(), new Set(controller.labeledRects()))
+        if (r.labelMs !== undefined) labelMs.push(r.labelMs)
+        controller.onFrame(r)
+        judgeLabels(frames[fi].t)
         fi++
       }
       for (const e of listener.push(audio.subarray(start, start + BLOCK), tStart)) {
@@ -114,12 +119,19 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
     }
     counts['sem som'] = picks.length - matched.size
     const heard = matched.size
-    const summary = `${DIR}\n${picks.length} pegadas do app, ${heard} com som, ${heardTotal} pegadas ouvidas\n${JSON.stringify(counts)}\n${wrong.join('\n')}\n`
+    labelMs.sort((a, b) => a - b)
+    const ms = (q: number) => (labelMs.length ? labelMs[Math.min(labelMs.length - 1, Math.floor(q * labelMs.length))].toFixed(1) : '-')
+    const labelSummary = MODELS
+      ? `categorias (${labeledPicks.length} pegadas do log com categoria): ${JSON.stringify(cats)}\n${wrongCats.join('\n')}\n` +
+        `leitura por varredura: p95 ${ms(0.95)} ms, máximo ${ms(1)} ms (${labelMs.length} varreduras)\n`
+      : ''
+    const summary = `${DIR}\n${picks.length} pegadas do app, ${heard} com som, ${heardTotal} pegadas ouvidas\n${JSON.stringify(counts)}\n${wrong.join('\n')}\n${labelSummary}`
     console.log(summary)
     if (process.env.ABI_REPLAY_OUT) writeFileSync(process.env.ABI_REPLAY_OUT, summary)
     if (STRICT) {
       expect(counts['errada'] ?? 0).toBeLessThanOrEqual(1)
       expect(counts['concorda'] ?? 0).toBeGreaterThanOrEqual(0.95 * heard)
+      if (MODELS) expect(cats['errada']).toBe(0)
     }
   }, 30 * 60_000)
 })

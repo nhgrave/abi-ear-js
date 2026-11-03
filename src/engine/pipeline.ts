@@ -3,6 +3,7 @@ import { CursorTracker, type CursorSample } from './vision/cursor'
 import { meanGray, type Gray } from './vision/image'
 import { scan } from './vision/grid'
 import type { GridGeometry, GridScan } from './vision/types'
+import { readLabels, type LabelModels } from './vision/label-reader'
 
 export const SCAN_INTERVAL_MS = 350 // o mesmo intervalo de varredura do app desktop
 
@@ -16,6 +17,7 @@ export type FrameResult = {
   scan: GridScan | null | undefined // undefined: sem varredura neste quadro
   mean: number // média de cinza (quadro preto)
   labels: LabelReading[] // vazio sem varredura ou sem leitor
+  labelMs?: number // tempo da leitura dos rótulos neste quadro (medido no replay)
 }
 
 /** O vendedor fica na metade direita da tela: sem OCR, é o que separa o grid dele do inventário. */
@@ -29,14 +31,24 @@ export class FramePipeline {
   private lastScanT: number | null = null
   private lastGrid: GridGeometry | null = null
 
-  process(gray: Gray, t: number, hint: GridGeometry | null): FrameResult {
+  constructor(private models: LabelModels | null = null) {}
+
+  /** `labeled`: caixas que já têm categoria ("c,r,w,h" em células da tela), que não são relidas. */
+  process(gray: Gray, t: number, hint: GridGeometry | null, labeled: ReadonlySet<string> = new Set()): FrameResult {
     let found: GridScan | null | undefined
+    let labels: LabelReading[] = []
+    let labelMs: number | undefined
     if (this.lastScanT === null || t - this.lastScanT >= SCAN_INTERVAL_MS) {
       found = scanVendor(gray, hint)
       this.lastScanT = t
       this.lastGrid = found ? found.geometry : null
+      if (found && this.models) {
+        const t0 = performance.now()
+        labels = readLabels(gray, found.geometry, found.boxes, this.models, labeled)
+        labelMs = performance.now() - t0
+      }
     }
     const cursor = this.cursor.find(gray, t, this.lastGrid ?? hint)
-    return { t, cursor, scan: found, mean: meanGray(gray), labels: [] }
+    return { t, cursor, scan: found, mean: meanGray(gray), labels, ...(labelMs !== undefined && { labelMs }) }
   }
 }
