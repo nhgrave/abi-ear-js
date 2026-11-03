@@ -10,7 +10,7 @@ export const RECORDER_MARKERS = [
   'Gravação (modo local)',
 ]
 
-const PATH_MARKERS = ['recorder', 'spike']
+const PATH_MARKERS = ['recorder', 'spike', 'frames.worker']
 
 /** Procura sinais do gravador em caminhos e no conteúdo dos arquivos. Os nomes em `data/` (base, sons e ícones do
  * jogo) ficam fora da busca por caminho: o jogo tem um item "Portable Recorder". */
@@ -19,7 +19,7 @@ export function findLeaks(files) {
   for (const file of files) {
     const gameData = file.path.startsWith('data/')
     for (const marker of PATH_MARKERS) {
-      if (!gameData && file.path.includes(marker)) leaks.push(`${file.path}: ${marker}`)
+      if (!gameData && file.path.toLowerCase().includes(marker)) leaks.push(`${file.path}: ${marker}`)
     }
     for (const marker of RECORDER_MARKERS) {
       if (file.text.includes(marker)) leaks.push(`${file.path}: ${marker}`)

@@ -45,8 +45,23 @@ describe('recording format', () => {
       audioSamples: 2_880_000,
       audioStartEpochMs: null,
       fallbackEpochMs: 1_793_000_000_000,
+      error: null,
     })
     expect(f).toMatchObject({ endedAt: '2026-11-04T00:31:12.000Z', frames: 590, framesSkipped: 3, audioSamples: 2_880_000, audioStartEpochMs: 1_793_000_000_000 })
+    expect(f.error).toBeUndefined()
+  })
+
+  it('finishing after a failure records the error and unknown audio', () => {
+    const f = finishSession(startSession(base), {
+      endedAt: new Date('2026-11-04T00:31:12Z'),
+      frames: 10,
+      framesSkipped: 0,
+      audioSamples: null,
+      audioStartEpochMs: 1,
+      fallbackEpochMs: 1,
+      error: 'áudio: disk full',
+    })
+    expect(f).toMatchObject({ error: 'áudio: disk full', audioSamples: null, endedAt: '2026-11-04T00:31:12.000Z' })
   })
 
   it('finishing keeps a known audio start', () => {
@@ -57,6 +72,7 @@ describe('recording format', () => {
       audioSamples: 1,
       audioStartEpochMs: 1_793_000_000_500.25,
       fallbackEpochMs: 1,
+      error: null,
     })
     expect(f.audioStartEpochMs).toBe(1_793_000_000_500.25)
   })

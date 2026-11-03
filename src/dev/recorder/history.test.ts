@@ -26,7 +26,13 @@ describe('recording history', () => {
       frames: 590,
       audioS: 60,
       resolution: [2560, 1440],
+      error: null,
     }))
+
+  it('a session that ended on an error is failed and keeps the error', () =>
+    expect(
+      summarize('n', { startedAt: '2026-11-04T00:30:12.000Z', endedAt: '2026-11-04T00:31:12.000Z', audioSamples: null, frames: 50, error: 'áudio: disk full', source: 'abi-ear-js' }, null, 0),
+    ).toMatchObject({ status: 'failed', error: 'áudio: disk full', durationS: 60, frames: 50, audioS: null }))
 
   it('a started session without end is incomplete', () =>
     expect(summarize('n', { startedAt: '2026-11-04T00:30:12.000Z', source: 'abi-ear-js' }, 12, null)).toMatchObject({ status: 'incomplete', frames: 12, durationS: null }))
@@ -64,7 +70,7 @@ describe('recording history', () => {
     const session = { startedAt: '2026-11-04T00:30:12.000Z', endedAt: '2026-11-04T00:30:22.000Z', frames: 99, audioSamples: 480_000, source: 'abi-ear-js', video: {} }
     const root = fakeDir({ '2026-11-04-213012': { 'session.json': JSON.stringify(session), 'audio.wav': new Uint8Array(44), frames: { '1.jpg': '' } } })
     expect(await listRecordings(root)).toEqual([
-      { name: '2026-11-04-213012', status: 'complete', startedAt: session.startedAt, durationS: 10, frames: 99, audioS: 10, resolution: null },
+      { name: '2026-11-04-213012', status: 'complete', startedAt: session.startedAt, durationS: 10, frames: 99, audioS: 10, resolution: null, error: null },
     ])
   })
 })

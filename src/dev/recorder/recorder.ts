@@ -32,6 +32,15 @@ export function recordingSupport(): string | null {
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
+async function exists(root: FileSystemDirectoryHandle, name: string): Promise<boolean> {
+  try {
+    await root.getDirectoryHandle(name)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function writeJson(dir: FileSystemDirectoryHandle, name: string, value: unknown): Promise<void> {
   const w = await (await dir.getFileHandle(name, { create: true })).createWritable()
   await w.write(JSON.stringify(value, null, 2))
@@ -48,8 +57,9 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
   const started = new Date()
   const startedAtMs = performance.timeOrigin + performance.now()
   const name = recordingName(started)
+  // nome com resolução de 1 s: não misturar duas gravações na mesma pasta
+  if (await exists(root, name)) throw new Error(`Já existe a gravação ${name}; tente de novo em um segundo.`)
   const dir = await root.getDirectoryHandle(name, { create: true })
-  const framesDir = await dir.getDirectoryHandle('frames', { create: true })
   let session: SessionFile = startSession({
     startedAt: started,
     userAgent: navigator.userAgent,
@@ -58,8 +68,7 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
     appVersion: __APP_VERSION__,
     frameIntervalMs: FRAME_INTERVAL_MS,
   })
-  await writeJson(dir, 'session.json', session) // já no começo: uma gravação interrompida aparece no histórico
-  const wav = new WavWriter(await (await dir.getFileHandle('audio.wav', { create: true })).createWritable())
+  let wav: WavWriter | null = null
 
   let ctx: AudioContext | null = null
   let node: AudioWorkletNode | null = null
@@ -105,10 +114,10 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
       )
       const fr = await Promise.race([framesStopped, timeout])
       release()
-      if (fr.error) failure ??= fr.error
-      let audioSamples = wav.samples
+      if (fr.error) failure ??= `quadros: ${fr.error}`
+      let audioSamples: number | null = null // null: o WAV não foi gravado
       try {
-        audioSamples = await wav.finish()
+        audioSamples = await wav!.finish()
       } catch (err) {
         failure ??= `áudio: ${message(err)}`
       }
@@ -119,6 +128,7 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
         audioSamples,
         audioStartEpochMs,
         fallbackEpochMs: startedAtMs,
+        error: failure, // gravação que parou por erro não aparece como completa
       })
       try {
         await writeJson(dir, 'session.json', session)
@@ -132,6 +142,10 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
   }
 
   try {
+    const framesDir = await dir.getDirectoryHandle('frames', { create: true })
+    await writeJson(dir, 'session.json', session) // já no começo: uma gravação interrompida aparece no histórico
+    const writer = (wav = new WavWriter(await (await dir.getFileHandle('audio.wav', { create: true })).createWritable()))
+
     // áudio: contexto próprio com o worklet da página; o tempo da primeira amostra vem do getOutputTimestamp dele
     if (audioTrack) {
       ctx = new AudioContext({ sampleRate: SAMPLE_RATE })
@@ -147,9 +161,9 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
       const audioCtx = ctx
       node.port.onmessage = (e: MessageEvent<{ frame: number; samples: Float32Array }>) => {
         if (stopping) return
-        if (wav.error !== null) return fail(`áudio: ${message(wav.error)}`)
+        if (writer.error !== null) return fail(`áudio: ${message(writer.error)}`)
         audioStartEpochMs ??= performance.timeOrigin + audioTimeMs(e.data.frame, outputTimestamp(audioCtx))
-        wav.append(e.data.samples)
+        writer.append(e.data.samples)
       }
     }
 
@@ -162,17 +176,21 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
       skipped = e.data.skipped
       if (e.data.type !== 'stopped') return
       resolveFrames(e.data)
-      if (e.data.error) fail(`quadros: ${e.data.error}`)
+      // o worker parou sozinho (erro, ou a trilha acabou antes do listener de 'ended'): a gravação para junto
+      if (e.data.error) failure ??= `quadros: ${e.data.error}`
+      void stop()
     }
     w.onerror = (e) => {
-      resolveFrames({ frames, skipped, error: e.message || 'erro no worker de quadros' })
-      fail(`quadros: ${e.message || 'erro no worker'}`)
+      resolveFrames({ frames, skipped, error: e.message || 'erro no worker' })
+      void stop()
     }
     w.postMessage({ type: 'start', readable, dir: framesDir, intervalMs: FRAME_INTERVAL_MS } satisfies FramesIn, [readable])
   } catch (err) {
+    // começo que falhou: libera tudo e apaga a pasta pela metade, para não virar uma "incompleta" no histórico
     stopping = true
     release()
-    await wav.finish().catch(() => {})
+    await wav?.finish().catch(() => {})
+    await root.removeEntry(name, { recursive: true }).catch(() => {})
     throw err
   }
 
@@ -180,7 +198,7 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
   video.addEventListener('ended', onEnded)
 
   return {
-    stats: () => ({ name, startedAtMs: started.getTime(), frames, skipped, audioS: wav.samples / SAMPLE_RATE }),
+    stats: () => ({ name, startedAtMs: started.getTime(), frames, skipped, audioS: (wav?.samples ?? 0) / SAMPLE_RATE }),
     stop,
     done,
   }

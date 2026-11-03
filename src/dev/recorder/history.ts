@@ -4,12 +4,13 @@ import { SAMPLE_RATE } from './wav'
 
 export type RecordingSummary = {
   name: string
-  status: 'complete' | 'incomplete' | 'prototype'
+  status: 'complete' | 'failed' | 'incomplete' | 'prototype'
   startedAt: string | null
   durationS: number | null
   frames: number | null
   audioS: number | null
   resolution: [number, number] | null
+  error: string | null
 }
 
 const WAV_HEADER = 44
@@ -29,20 +30,22 @@ export function summarize(name: string, session: unknown, frameCount: number | n
 
   let status: RecordingSummary['status']
   if (startedAt === null) status = 'incomplete'
-  else if (endedAt !== null) status = 'complete'
+  else if (endedAt !== null) status = str(s.error) !== null ? 'failed' : 'complete'
   else if (s.source === undefined && num(s.audioStartEpochMs) !== null) status = 'prototype'
   else status = 'incomplete'
 
   const samples = num(s.audioSamples)
-  const duration = status === 'complete' ? (Date.parse(endedAt!) - Date.parse(startedAt!)) / 1000 : NaN
+  const failedAudio = status === 'failed' && s.audioSamples === null // o WAV não foi gravado
+  const duration = endedAt !== null && startedAt !== null ? (Date.parse(endedAt!) - Date.parse(startedAt!)) / 1000 : NaN
   return {
     name,
     status,
     startedAt,
     durationS: Number.isFinite(duration) ? duration : null,
     frames: num(s.frames) ?? frameCount,
-    audioS: samples !== null ? samples / SAMPLE_RATE : wavAudioS,
+    audioS: samples !== null ? samples / SAMPLE_RATE : failedAudio ? null : wavAudioS,
     resolution: w !== null && h !== null ? [w, h] : null,
+    error: str(s.error),
   }
 }
 

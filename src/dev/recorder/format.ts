@@ -16,7 +16,8 @@ export type SessionFile = {
   endedAt?: string
   frames?: number
   framesSkipped?: number
-  audioSamples?: number
+  audioSamples?: number | null // null: a escrita do áudio falhou
+  error?: string // por que a gravação parou, se foi por erro
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -57,10 +58,19 @@ export function startSession(o: {
 /** O session.json final. Sem nenhuma amostra de áudio, o início do áudio vira `fallbackEpochMs`, como no protótipo. */
 export function finishSession(
   s: SessionFile,
-  o: { endedAt: Date; frames: number; framesSkipped: number; audioSamples: number; audioStartEpochMs: number | null; fallbackEpochMs: number },
+  o: {
+    endedAt: Date
+    frames: number
+    framesSkipped: number
+    audioSamples: number | null
+    audioStartEpochMs: number | null
+    fallbackEpochMs: number
+    error: string | null
+  },
 ): SessionFile {
   return {
     ...s,
+    ...(o.error !== null ? { error: o.error } : {}),
     audioStartEpochMs: o.audioStartEpochMs ?? o.fallbackEpochMs,
     endedAt: o.endedAt.toISOString(),
     frames: o.frames,

@@ -28,7 +28,15 @@ const elapsed = computed(() => {
 
 const msg = (err: unknown) => (err instanceof Error ? err.message : String(err))
 const dash = (v: number | null, f: (n: number) => string) => (v === null ? '—' : f(v))
-const STATUS: Record<RecordingSummary['status'], string> = { complete: 'completa', incomplete: 'incompleta', prototype: 'protótipo' }
+const STATUS: Record<RecordingSummary['status'] | 'recording', string> = {
+  complete: 'completa',
+  failed: 'com erro',
+  incomplete: 'incompleta',
+  prototype: 'protótipo',
+  recording: 'gravando',
+}
+/** A gravação em andamento ainda não tem fim no session.json: não mostrar como incompleta. */
+const statusOf = (r: RecordingSummary) => (active.value && stats.value?.name === r.name ? 'recording' : r.status)
 const when = (iso: string | null) => (iso && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleString('pt-BR') : '—')
 const duration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
 
@@ -75,6 +83,13 @@ async function record(): Promise<void> {
       if (err) error.value = `A gravação parou: ${err}`
       await finished(rec)
     })
+    // o compartilhamento pode ter caído enquanto a gravação começava (o watch só vê gravação ativa)
+    if (!props.sharing) {
+      notice.value = 'Compartilhamento encerrado: a gravação foi salva.'
+      await rec.stop()
+      await finished(rec)
+      return
+    }
     await refresh()
   } catch (err) {
     error.value = `Não foi possível começar a gravar: ${msg(err)}`
@@ -179,7 +194,7 @@ onBeforeUnmount(() => {
             <td>{{ dash(r.frames, String) }}</td>
             <td>{{ dash(r.audioS, (s) => `${s.toFixed(1)} s`) }}</td>
             <td>{{ r.resolution ? `${r.resolution[0]}×${r.resolution[1]}` : '—' }}</td>
-            <td :class="r.status">{{ STATUS[r.status] }}</td>
+            <td :class="statusOf(r)" :title="r.error ?? undefined">{{ STATUS[statusOf(r)] }}</td>
             <td><button @click="copy(r.name)">{{ copied === r.name ? 'Copiado' : 'Copiar nome' }}</button></td>
           </tr>
         </tbody>
@@ -206,6 +221,8 @@ th { color: var(--muted); font-weight: 500; }
 .mono { font-family: ui-monospace, monospace; }
 .complete { color: var(--green); }
 .incomplete { color: var(--yellow); }
+.failed { color: var(--red); }
+.recording { color: var(--red); }
 .prototype { color: var(--muted); }
 @media (max-width: 760px) { .history { overflow-x: auto; } }
 </style>
