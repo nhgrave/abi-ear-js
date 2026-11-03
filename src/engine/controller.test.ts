@@ -226,7 +226,7 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
 
     it('other_grid_without_vendor_labels_is_ignored', () => {
       confirm(1_000, A, 'Computer Parts')
-      const other = grid([rect(0, 0, 1, 1), rect(1, 0, 1, 1), rect(2, 0, 1, 1)])
+      const other = grid([rect(0, 0, 1, 1), rect(1, 0, 1, 1), rect(2, 0, 1, 1)], { ...GEOM, x0: 300 })
       c.onFrame(frame(2_000, other, null, other.boxes.map((r) => read(r, null))))
       expect(c.vendorVisible).toBe(false)
       expect(c.session.boxes.get('0,0')!.label).toBe('Computer Parts')
@@ -259,7 +259,7 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
       confirm(97_000, A, 'Computer Parts')
       pickAt(98_500, ON_7_1)
       c.onFrame(frame(99_000, null))
-      const stash = grid([rect(0, 0, 1, 1), rect(2, 3, 1, 1)])
+      const stash = grid([rect(0, 0, 1, 1), rect(2, 3, 1, 1)], { ...GEOM, x0: 300 })
       c.onFrame(frame(112_000, stash, null, stash.boxes.map((r) => read(r, null))))
       expect(c.vendorVisible).toBe(false)
       expect(c.session.boxes.get('7,1')!.picks).toBe(1)
@@ -308,6 +308,37 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
       const many = grid([A, B, rect(3, 0, 1, 1), rect(4, 0, 1, 1), rect(5, 0, 1, 1)])
       c.onFrame(frame(2_000, many, null, [read(A, 'Energy Items'), ...many.boxes.slice(1).map((r) => read(r, null))]))
       expect(c.vendorVisible).toBe(true)
+    })
+
+    it('votes_skip_scans_the_session_did_not_apply', () => {
+      // grid fora do reticulado (rolagem animada, aviso no topo): a sessão só aplica quando a próxima leitura confirma
+      confirm(1_000, A, 'Energy Items')
+      const old = c.session.boxes.get('0,0')!
+      const shifted = grid([A, B], { ...GEOM, y0: 32 })
+      c.onFrame(frame(2_000, shifted, null, [read(A, 'Flammables')])) // não aplicada: não vota
+      c.onFrame(frame(2_350, shifted, null, [read(A, 'Flammables')])) // confirmada: primeiro voto
+      expect(c.session.boxes.get('0,0')).toBe(old)
+      expect(old.label).toBe('Energy Items')
+    })
+
+    it('known_vendor_grid_with_only_unmodeled_boxes_stays_visible', () => {
+      // categorias sem modelo (Medical Supplies...): texto e nenhum rótulo, no mesmo grid do vendedor guardado
+      confirm(1_000, A, 'Energy Items')
+      pickAt(3_000, ON_7_1)
+      const rows = grid([rect(0, 2, 2, 2), rect(2, 2, 2, 2), rect(4, 2, 2, 2)])
+      c.onFrame(frame(4_000, rows, null, rows.boxes.map((r) => read(r, null))))
+      expect(c.vendorVisible).toBe(true)
+      c.onFrame(frame(30_000, rows, null, rows.boxes.map((r) => read(r, null)))) // vendedor reaberto depois de sumir
+      expect(c.vendorVisible).toBe(true)
+    })
+
+    it('another_pitch_is_rejected_even_with_a_label', () => {
+      pickAt(1_000, ON_7_1)
+      const small = grid([rect(0, 0, 2, 2), rect(2, 0, 1, 1)], { x0: 600, y0: 80, pitch: 40, cols: 6, rows: 5 })
+      c.onFrame(frame(1_500, small, null, [read(rect(0, 0, 2, 2), 'Energy Items')]))
+      expect(c.vendorVisible).toBe(false)
+      expect(c.session.geometry!.pitch).toBe(64)
+      expect(c.session.boxes.get('7,1')!.picks).toBe(1)
     })
 
     it('view_shows_the_label', () => {

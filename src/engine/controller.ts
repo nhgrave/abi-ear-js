@@ -84,7 +84,7 @@ export class Controller {
     if (r.scan === undefined) return // sem varredura neste quadro
     const readings = r.labels
     const anyLabel = readings.some((x) => x.label !== null)
-    if (r.scan === null || this.rejectedByText(readings, anyLabel) || this.otherScreen(r.scan, readings, anyLabel, r.t)) {
+    if (r.scan === null || this.rejectedByText(r.scan, readings, anyLabel) || this.otherScreen(r.scan, readings, anyLabel, r.t)) {
       this.vendorVisible = false // a sessão fica guardada: o vendedor pode ser reaberto
       return
     }
@@ -92,8 +92,8 @@ export class Controller {
       this.newSession() // outro vendedor, ou o estoque mudou demais
     }
     this.vendorVisible = true
-    this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t)
-    this.vote(readings, r.t)
+    // só vota quando a sessão aplicou o scan: aguardando confirmação, as posições guardadas são as do layout anterior
+    if (this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t)) this.vote(readings, r.t)
   }
 
   onPickup(e: Pickup): PickupOutcome {
@@ -152,17 +152,28 @@ export class Controller {
     return [...this.session.boxes.values()].flatMap((b) => (b.label !== null ? [b.label] : []))
   }
 
-  /** Outra tela com grid (ex.: Recycling Station): tantas caixas com texto e nenhum rótulo de vendedor. */
-  private rejectedByText(readings: LabelReading[], anyLabel: boolean): boolean {
-    return this.labelsSeen && !anyLabel && readings.filter((x) => x.hasText).length >= MIN_TEXTS_TO_REJECT
+  /** O grid do scan é o do vendedor guardado: mesma célula e mesmas colunas (a rolagem só muda a altura). */
+  private sameVendorGrid(scan: GridScan): boolean {
+    const g = this.session.geometry
+    if (g === null || this.session.boxes.size === 0) return false
+    const s = scan.geometry
+    return Math.abs(s.pitch - g.pitch) <= OTHER_PITCH * g.pitch && Math.abs(s.x0 - g.x0) <= 0.5 * g.pitch
   }
 
-  /** Grid sem rótulo de vendedor que não pode ser o vendedor guardado: célula de outro tamanho ou, depois que a página
-   * leu rótulos, grid com texto quando o vendedor sumiu há tempo (a sessão seria trocada por ele). */
+  /** Outra tela com grid (ex.: Recycling Station): tantas caixas com texto e nenhum rótulo de vendedor. Não vale no
+   * grid do vendedor guardado: lá, texto sem rótulo é categoria sem modelo (Medical Supplies...), não outra tela. */
+  private rejectedByText(scan: GridScan, readings: LabelReading[], anyLabel: boolean): boolean {
+    return this.labelsSeen && !anyLabel && readings.filter((x) => x.hasText).length >= MIN_TEXTS_TO_REJECT && !this.sameVendorGrid(scan)
+  }
+
+  /** Grid que não pode ser o vendedor guardado: célula de outro tamanho (mesmo com rótulo: o leitor lê em qualquer
+   * escala) ou, depois que a página leu rótulos, grid com texto e sem rótulo em outro lugar quando o vendedor sumiu
+   * há tempo (a sessão seria trocada por ele). */
   private otherScreen(scan: GridScan, readings: LabelReading[], anyLabel: boolean, t: number): boolean {
     const geom = this.session.geometry
-    if (this.session.boxes.size === 0 || geom === null || anyLabel) return false
+    if (this.session.boxes.size === 0 || geom === null) return false
     if (Math.abs(scan.geometry.pitch - geom.pitch) > OTHER_PITCH * geom.pitch) return true
+    if (anyLabel || this.sameVendorGrid(scan)) return false
     return this.labelsSeen && readings.some((x) => x.hasText) && this.session.isExpired(t)
   }
 
