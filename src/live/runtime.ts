@@ -7,6 +7,7 @@ import type { LabelModels } from '../engine/vision/label-reader'
 import type { SessionView } from '../engine/view'
 import type { MessageKey } from '../i18n'
 import workletUrl from './audio-worklet.ts?worker&url'
+import { LABEL_MODELS_URL, loadLabelModels } from './label-data'
 import { audioTimeMs, DISPLAY_MEDIA_OPTIONS, outputTimestamp, streamProblemKeys } from './capture'
 import { audioHealth, cursorHealth, screenHealth, vendorHealth, type Health } from './health'
 import type { AudioIn, AudioOut, VisionIn, VisionOut } from './protocol'
@@ -125,9 +126,8 @@ export function createRuntime() {
       const resp = await fetch('data/merchant.json')
       if (!resp.ok) throw new Error(`base: HTTP ${resp.status}`)
       ds = new Dataset(await resp.json())
-      const labels = await fetch('data/labels/en.json')
-      if (!labels.ok) throw new Error(`modelos de rótulo: HTTP ${labels.status}`)
-      models = (await labels.json()) as LabelModels
+      models = await loadLabelModels() // opcional: sem modelos, segue sem ler os rótulos
+      if (!models) console.warn(`abi-ear: modelos de rótulo indisponíveis (${LABEL_MODELS_URL}); seguindo sem ler os rótulos`)
       controller = new Controller(ds)
       state.profile = parseProfileChoice(readProfile(), ds) // perfil que a base não tem mais: automático
       controller.setProfile(state.profile)

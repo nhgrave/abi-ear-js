@@ -40,8 +40,9 @@ Pedido do autor em 02/11. Passa por design e plano próprios.
 
 ## 4. Pendências pequenas da revisão da v0.2
 
-- [ ] Se `data/labels/en.json` não carregar, a página inteira falha ("problem.load"); deveria seguir como a v0.1
-  (sem leitura). Conferir também o `version` do arquivo.
+- [x] Se `data/labels/en.json` não carregar, a página inteira falha ("problem.load"); deveria seguir como a v0.1
+  (sem leitura). Conferir também o `version` do arquivo. (`src/live/label-data.ts`: arquivo ausente, inválido ou de
+  outra versão vira "sem modelos", com aviso no console.)
 - [ ] Contestação de categoria: leituras contrárias isoladas e distantes no tempo ainda somam para trocar a caixa
   (`controller.ts`, `vote`); deveriam ser seguidas de verdade.
 - [ ] Uma caixa trocada por engano (`session.replaceBox`) não volta, e o painel aberto dela fecha.
