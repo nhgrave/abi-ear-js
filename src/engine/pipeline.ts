@@ -33,8 +33,7 @@ export class FramePipeline {
 
   constructor(private models: LabelModels | null = null) {}
 
-  /** `labeled`: caixas que já têm categoria ("c,r,w,h" em células da tela), que não são relidas. */
-  process(gray: Gray, t: number, hint: GridGeometry | null, labeled: ReadonlySet<string> = new Set()): FrameResult {
+  process(gray: Gray, t: number, hint: GridGeometry | null): FrameResult {
     let found: GridScan | null | undefined
     let labels: LabelReading[] = []
     let labelMs: number | undefined
@@ -44,7 +43,7 @@ export class FramePipeline {
       this.lastGrid = found ? found.geometry : null
       if (found && this.models) {
         const t0 = performance.now()
-        labels = readLabels(gray, found.geometry, found.boxes, this.models, labeled)
+        labels = readLabels(gray, found.geometry, found.boxes, this.models)
         labelMs = performance.now() - t0
       }
     }

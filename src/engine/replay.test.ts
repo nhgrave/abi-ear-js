@@ -107,7 +107,7 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
       while (fi < frames.length && frames[fi].t <= tStart) {
         const img = decode(readFileSync(frames[fi].path), { useTArray: true, formatAsRGBA: true })
         const gray = rgbaToGray(img.data as unknown as Uint8ClampedArray, img.width, img.height)
-        const r = pipeline.process(gray, frames[fi].t, controller.hint(), new Set(controller.labeledRects()))
+        const r = pipeline.process(gray, frames[fi].t, controller.hint())
         if (r.labelMs !== undefined) labelMs.push(r.labelMs)
         controller.onFrame(r)
         judgeLabels(frames[fi].t)

@@ -164,10 +164,11 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
       expect(c.session.boxes.get('0,0')!.label).toBe('Energy Items')
     })
 
-    it('accepted_label_never_changes', () => {
+    it('accepted_label_never_changes_on_the_same_box', () => {
       confirm(1_000, A, 'Energy Items')
-      confirm(2_000, A, 'Tools')
-      expect(c.session.boxes.get('0,0')!.label).toBe('Energy Items')
+      const box = c.session.boxes.get('0,0')!
+      confirm(2_000, A, 'Tools') // vira outra caixa; a antiga continua Energy Items
+      expect(box.label).toBe('Energy Items')
     })
 
     it('votes_do_not_carry_to_another_box_after_scroll', () => {
@@ -275,13 +276,38 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
       expect(c.hint()).toEqual(GEOM)
     })
 
-    it('labeled_rects_follow_the_current_boxes', () => {
-      confirm(1_000, A, 'Computer Parts')
-      expect(c.labeledRects()).toEqual(['0,0,2,2'])
-      const split = grid([rect(0, 0, 1, 1), rect(1, 0, 1, 1), rect(0, 1, 1, 1), rect(1, 1, 1, 1), B])
-      c.onFrame(frame(2_000, split))
-      c.onFrame(frame(2_350, split))
-      expect(c.labeledRects()).not.toContain('0,0,2,2')
+    it('a_box_read_twice_as_another_category_is_a_new_box', () => {
+      // o estoque mudou e uma caixa do mesmo tamanho ficou no lugar: a sessão achou que era a mesma
+      const wide = rect(0, 0, 3, 2)
+      const scan = grid([wide, B])
+      for (const dt of [380, 280, 180]) c.onFrame(frame(5_000 - dt, dt === 380 ? scan : undefined, [10, 10]))
+      c.onPickup({ kind: 'pickup', t: 5_000, soundId: 6, score: 0.95, hits: [{ soundId: 6, score: 0.95 }] })
+      confirm(6_000, wide, 'Energy Items', scan)
+      const old = c.session.boxes.get('0,0')!
+      expect(old.picks).toBe(1)
+      confirm(7_000, wide, 'Flammables', scan)
+      const now = c.session.boxes.get('0,0')!
+      expect(now.uid).not.toBe(old.uid)
+      expect(now.label).toBe('Flammables')
+      expect(now.picks).toBe(0)
+    })
+
+    it('one_contrary_reading_keeps_the_box', () => {
+      confirm(1_000, A, 'Energy Items')
+      const old = c.session.boxes.get('0,0')!
+      c.onFrame(frame(2_000, SCAN, null, [read(A, 'Tools')]))
+      c.onFrame(frame(2_350, SCAN, null, [read(A, 'Energy Items')]))
+      c.onFrame(frame(2_700, SCAN, null, [read(A, 'Tools')]))
+      expect(c.session.boxes.get('0,0')).toBe(old)
+      expect(old.label).toBe('Energy Items')
+    })
+
+    it('boxes_without_a_model_do_not_reject_the_vendor', () => {
+      // as caixas conhecidas são lidas com rótulo; as de categoria sem modelo vêm com texto e sem rótulo
+      confirm(1_000, A, 'Energy Items')
+      const many = grid([A, B, rect(3, 0, 1, 1), rect(4, 0, 1, 1), rect(5, 0, 1, 1)])
+      c.onFrame(frame(2_000, many, null, [read(A, 'Energy Items'), ...many.boxes.slice(1).map((r) => read(r, null))]))
+      expect(c.vendorVisible).toBe(true)
     })
 
     it('view_shows_the_label', () => {

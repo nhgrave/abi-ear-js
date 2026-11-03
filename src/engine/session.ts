@@ -186,6 +186,14 @@ export class VendorSession {
 
   // ----- atualizações
 
+  /** Outra caixa do mesmo tamanho no lugar de `old` (a leitura do rótulo mostrou outra categoria): caixa nova, sem os
+   * dados da antiga. */
+  replaceBox(old: TrackedBox, label: string, nowMs: number): TrackedBox {
+    const box = new TrackedBox(old.col, old.row, old.w, old.h, old.clipped, { label, seenAt: nowMs })
+    this.boxes.set(old.key, box)
+    return box
+  }
+
   /** Deslocamento de linhas que encaixa o layout do scan no layout guardado, ou null. */
   private anchorOffset(scan: GridScan): number | null {
     const curr = scan.boxes.filter((b) => !b.clipped)

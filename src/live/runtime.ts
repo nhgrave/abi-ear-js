@@ -248,7 +248,7 @@ export function createRuntime() {
         means.push([r.t, r.mean])
         const [w, h] = e.data.size
         if (!state.resolution || state.resolution[0] !== w || state.resolution[1] !== h) state.resolution = [w, h]
-        visionWorker.postMessage({ type: 'hint', hint: controller!.hint(), labeled: controller!.labeledRects() } satisfies VisionIn)
+        visionWorker.postMessage({ type: 'hint', hint: controller!.hint() } satisfies VisionIn)
         if (r.scan !== undefined) refresh()
       }
       const Processor = (globalThis as { MediaStreamTrackProcessor?: new (o: { track: MediaStreamTrack }) => { readable: ReadableStream<VideoFrame> } })

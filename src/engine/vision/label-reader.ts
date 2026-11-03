@@ -113,17 +113,17 @@ function score(ones: Int32Array, nOnes: number, W: number, H: number, tpl: Templ
   return best
 }
 
-/** Rótulo de cada caixa inteira ainda sem categoria (chave "c,r,w,h" fora de `skip`). */
+/** Rótulo de cada caixa inteira. Todas são lidas em toda varredura, também as que já têm categoria: só a leitura
+ * percebe que outra caixa do mesmo tamanho tomou o lugar de uma pega (o estoque do vendedor muda). */
 export function readLabels(
   gray: Gray,
   geom: GridGeometry,
   boxes: readonly BoxRect[],
   models: LabelModels,
-  skip: ReadonlySet<string>,
 ): LabelReading[] {
   const out: LabelReading[] = []
   for (const box of boxes) {
-    if (box.clipped || skip.has(`${box.col},${box.row},${box.w},${box.h}`)) continue
+    if (box.clipped) continue
     const [W, H] = maskSize(box.w)
     const mask = textMask(gray, geom, box, models.textLevel)
     const ones = new Int32Array(2 * mask.length)

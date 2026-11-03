@@ -74,16 +74,6 @@ export class Controller {
     return this.session.geometry
   }
 
-  /** Caixas à vista que já têm categoria, como "c,r,w,h" em células da tela: a visão não relê. */
-  labeledRects(): string[] {
-    const [lo, hi] = this.session.visibleRows()
-    const out: string[] = []
-    for (const b of this.session.boxes.values()) {
-      if (b.label !== null && b.row < hi && b.row + b.h > lo) out.push(`${b.col},${b.row - lo},${b.w},${b.h}`)
-    }
-    return out
-  }
-
   onFrame(r: FrameResult): void {
     if (r.cursor) {
       this.history.add(r.cursor)
@@ -103,7 +93,7 @@ export class Controller {
     }
     this.vendorVisible = true
     this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t)
-    this.vote(readings)
+    this.vote(readings, r.t)
   }
 
   onPickup(e: Pickup): PickupOutcome {
@@ -177,29 +167,31 @@ export class Controller {
   }
 
   /** Cada leitura vota na caixa da sessão que ocupa o mesmo retângulo da tela. Os votos ficam na identidade da caixa
-   * (uid), que acompanha rolagem e reorganização; leitura diferente recomeça a contagem; categoria aceita não muda. */
-  private vote(readings: LabelReading[]): void {
+   * (uid), que acompanha rolagem e reorganização, e leitura diferente recomeça a contagem. Caixa sem categoria ganha a
+   * lida duas vezes seguidas. Caixa com categoria não muda de categoria: lida duas vezes seguidas como outra, é outra
+   * caixa no mesmo lugar (o estoque mudou e a sessão a confundiu com a antiga), e entra como caixa nova. */
+  private vote(readings: LabelReading[], t: number): void {
     const off = this.session.rowOffset
-    let accepted: TrackedBox | null = null
-    let count = 0
+    let changed = false
     for (const r of readings) {
       if (r.label === null) continue
       const box = this.session.boxContaining(r.col, r.row + off)
-      if (!box || box.label !== null || box.col !== r.col || box.row !== r.row + off || box.w !== r.w || box.h !== r.h) continue
+      if (!box || box.col !== r.col || box.row !== r.row + off || box.w !== r.w || box.h !== r.h) continue
+      if (box.label === r.label) {
+        this.votes.delete(box.uid) // leitura que confirma: zera uma contestação em curso
+        continue
+      }
       const v = this.votes.get(box.uid)
       const n = v && v.label === r.label ? v.n + 1 : 1
       this.votes.set(box.uid, { label: r.label, n })
       if (n < VOTES_TO_ACCEPT) continue
-      box.label = r.label
       this.votes.delete(box.uid)
+      if (box.label === null) box.label = r.label
+      else this.session.replaceBox(box, r.label, t)
       this.labelsSeen = true
-      accepted = box
-      count++
+      changed = true
     }
-    if (count === 0) return
-    if (this.profileChoice === 'auto') this.rerankPicked() // os perfis podem ter mudado
-    else if (count === 1 && accepted!.picks) this.rerank(accepted!)
-    else this.rerankPicked()
+    if (changed) this.rerankPicked() // os perfis do automático podem ter mudado
   }
 
   /** Caixa com tamanho que nenhum item tem = algo cobre o grid (ou células vazias juntadas na borda): vira célula

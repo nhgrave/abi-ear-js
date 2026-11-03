@@ -69,30 +69,30 @@ describe('label reader', () => {
 
   it('reads_the_label_it_was_built_from', () => {
     const { gray, geom } = draw(64, BOX, 2)
-    expect(readLabels(gray, geom, [BOX], M, new Set())).toEqual([{ col: 0, row: 0, w: 2, h: 2, label: 'Tools', hasText: true }])
+    expect(readLabels(gray, geom, [BOX], M)).toEqual([{ col: 0, row: 0, w: 2, h: 2, label: 'Tools', hasText: true }])
   })
 
   it('unknown_text_has_text_but_no_label', () => {
     const { gray, geom } = draw(64, BOX, 99)
-    expect(readLabels(gray, geom, [BOX], M, new Set())[0]).toMatchObject({ label: null, hasText: true })
+    expect(readLabels(gray, geom, [BOX], M)[0]).toMatchObject({ label: null, hasText: true })
   })
 
   it('empty_band_has_no_text', () => {
     const { gray, geom } = draw(64, BOX, null)
-    expect(readLabels(gray, geom, [BOX], M, new Set())[0]).toMatchObject({ label: null, hasText: false })
+    expect(readLabels(gray, geom, [BOX], M)[0]).toMatchObject({ label: null, hasText: false })
   })
 
   it('reads_the_same_label_at_another_pitch', () => {
     for (const pitch of [43, 85]) {
       const { gray, geom } = draw(pitch, BOX, 1)
-      expect(readLabels(gray, geom, [BOX], M, new Set())[0].label).toBe('Energy Items')
+      expect(readLabels(gray, geom, [BOX], M)[0].label).toBe('Energy Items')
     }
   })
 
   it('reads despite the grid found one or two pixels off', () => {
     for (const dx of [-2, -1, 1, 2]) {
       const { gray, geom } = draw(64, BOX, 1)
-      expect(readLabels(gray, { ...geom, x0: geom.x0 + dx, y0: geom.y0 - dx }, [BOX], M, new Set())[0].label).toBe('Energy Items')
+      expect(readLabels(gray, { ...geom, x0: geom.x0 + dx, y0: geom.y0 - dx }, [BOX], M)[0].label).toBe('Energy Items')
     }
   })
 
@@ -103,21 +103,21 @@ describe('label reader', () => {
         const v = ARROW.data[y * ARROW.w + x]
         if (v > 150) gray.data[(geom.y0 + ay + y) * gray.w + geom.x0 + ax + x] = v
       }
-      expect([null, 'Energy Items']).toContain(readLabels(gray, geom, [BOX], M, new Set())[0].label)
+      expect([null, 'Energy Items']).toContain(readLabels(gray, geom, [BOX], M)[0].label)
     }
   })
 
-  it('skips_clipped_and_known_boxes', () => {
+  it('skips_clipped_boxes', () => {
     const { gray, geom } = draw(64, BOX, 1)
     const clipped: BoxRect = { col: 2, row: 0, w: 1, h: 1, clipped: true }
-    const known: BoxRect = { col: 2, row: 1, w: 1, h: 1, clipped: false }
-    const out = readLabels(gray, geom, [BOX, clipped, known], M, new Set(['2,1,1,1']))
-    expect(out.map((r) => `${r.col},${r.row}`)).toEqual(['0,0'])
+    const other: BoxRect = { col: 2, row: 1, w: 1, h: 1, clipped: false }
+    const out = readLabels(gray, geom, [BOX, clipped, other], M)
+    expect(out.map((r) => `${r.col},${r.row}`)).toEqual(['0,0', '2,1'])
   })
 
   it('a width with no models reads text but no label', () => {
     const one: BoxRect = { col: 0, row: 0, w: 1, h: 1, clipped: false }
     const { gray, geom } = draw(64, one, 1)
-    expect(readLabels(gray, geom, [one], M, new Set())[0]).toMatchObject({ label: null, hasText: true })
+    expect(readLabels(gray, geom, [one], M)[0]).toMatchObject({ label: null, hasText: true })
   })
 })

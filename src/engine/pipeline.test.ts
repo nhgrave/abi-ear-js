@@ -39,8 +39,6 @@ describe.skipIf(!hasFixtures('frames', 'live_vendor_backpack.json'))('pipeline',
     const results = [0, 100, 350].map((t) => p.process(gray, t, null))
     expect(results.map((r) => r.labels.length > 0)).toEqual([true, false, true])
     expect(results[0].labels.some((r) => r.hasText)).toBe(true)
-    const known = new Set(results[0].labels.map((r) => `${r.col},${r.row},${r.w},${r.h}`))
-    expect(p.process(gray, 700, null, known).labels).toEqual([])
     expect(new FramePipeline().process(gray, 0, null).labels).toEqual([])
   })
 })
