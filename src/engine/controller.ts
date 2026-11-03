@@ -1,16 +1,18 @@
-/** Junta visão, cursor e áudio na sessão do vendedor (abi_ear/controller.py sem OCR, tooltip nem calibração). */
+/** Junta visão, cursor, rótulos e áudio na sessão do vendedor (abi_ear/controller.py sem tooltip nem calibração). */
 import { attribute, CursorHistory, type Attribution } from './attribution'
 import type { ListenEvent } from './audio/listener'
 import { rank } from './candidates'
 import type { Dataset } from './data/dataset'
-import type { FrameResult } from './pipeline'
-import { allProfileIds } from './profiles'
+import type { FrameResult, LabelReading } from './pipeline'
+import { allProfileIds, profilesForLabels, type ProfileChoice } from './profiles'
 import { TrackedBox, VendorSession } from './session'
 import type { SessionView } from './view'
 import { boxCells, cellKey, type GridGeometry, type GridScan } from './vision/types'
 
 export const MAX_LAYOUT_AGE_MS = 1500 // pegada só vale se o grid foi visto há pouco
 export const OTHER_PITCH = 0.1 // célula deste tanto maior/menor que a do vendedor guardado: outra tela (inventário)
+export const MIN_TEXTS_TO_REJECT = 3 // outro grid do jogo: tantas caixas com texto e nenhum é rótulo de caixa
+const VOTES_TO_ACCEPT = 2 // leituras iguais, em quadros diferentes, para a categoria valer
 
 type Pickup = Extract<ListenEvent, { kind: 'pickup' }>
 export type PickupOutcome =
@@ -21,10 +23,14 @@ const NO_LABELS: ReadonlyMap<string, string | null> = new Map()
 
 export class Controller {
   session = new VendorSession()
-  profileId: number | null = null // null: todos os mapas
+  profileChoice: ProfileChoice = 'auto'
   vendorVisible = false
+  /** Algum rótulo já foi confirmado desde que a página abriu: o jogo está num idioma que a página lê. Só então valem
+   * as regras que dependem de rótulo (outra tela pelo texto, dica de busca); antes, tudo como na v0.1. */
+  labelsSeen = false
   lastArrowMs: number | null = null
   private history = new CursorHistory()
+  private votes = new Map<number, { label: string; n: number }>() // uid da caixa -> leitura e quantas vezes seguidas
   private sizes: [number, number][]
 
   constructor(public ds: Dataset) {
@@ -44,21 +50,38 @@ export class Controller {
   }
 
   profiles(): number[] {
-    return this.profileId === null ? allProfileIds(this.ds) : [this.profileId]
+    const c = this.profileChoice
+    if (c === 'all') return allProfileIds(this.ds)
+    if (c === 'auto') return profilesForLabels(this.ds, this.seenLabels())
+    return [c]
   }
 
-  setProfile(id: number | null): void {
-    this.profileId = id
-    for (const box of this.session.boxes.values()) if (box.picks) this.rerank(box)
+  setProfile(choice: ProfileChoice): void {
+    this.profileChoice = choice
+    this.rerankPicked()
   }
 
   clear(): void {
-    this.session = new VendorSession()
+    this.newSession()
   }
 
-  /** Grid do vendedor para a visão procurar primeiro. */
+  /** Grid do vendedor para a visão procurar primeiro. Depois que a página leu rótulos, só com algum rótulo lido nele
+   * (um grid de inventário guardado por engano não pode prender a busca). */
   hint(): GridGeometry | null {
-    return this.session.boxes.size > 0 ? this.session.geometry : null
+    const boxes = [...this.session.boxes.values()]
+    if (boxes.length === 0) return null
+    if (this.labelsSeen && !boxes.some((b) => b.label !== null)) return null
+    return this.session.geometry
+  }
+
+  /** Caixas à vista que já têm categoria, como "c,r,w,h" em células da tela: a visão não relê. */
+  labeledRects(): string[] {
+    const [lo, hi] = this.session.visibleRows()
+    const out: string[] = []
+    for (const b of this.session.boxes.values()) {
+      if (b.label !== null && b.row < hi && b.row + b.h > lo) out.push(`${b.col},${b.row - lo},${b.w},${b.h}`)
+    }
+    return out
   }
 
   onFrame(r: FrameResult): void {
@@ -69,15 +92,18 @@ export class Controller {
       this.history.add({ t: r.t, missing: true })
     }
     if (r.scan === undefined) return // sem varredura neste quadro
-    if (r.scan === null || this.otherScreen(r.scan)) {
+    const readings = r.labels
+    const anyLabel = readings.some((x) => x.label !== null)
+    if (r.scan === null || this.rejectedByText(readings, anyLabel) || this.otherScreen(r.scan, readings, anyLabel, r.t)) {
       this.vendorVisible = false // a sessão fica guardada: o vendedor pode ser reaberto
       return
     }
     if (this.session.isExpired(r.t) && this.session.boxes.size > 0 && !this.session.reopen(r.scan)) {
-      this.session = new VendorSession() // outro vendedor, ou o estoque mudou demais
+      this.newSession() // outro vendedor, ou o estoque mudou demais
     }
     this.vendorVisible = true
     this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t)
+    this.vote(readings)
   }
 
   onPickup(e: Pickup): PickupOutcome {
@@ -104,6 +130,7 @@ export class Controller {
         w: b.w,
         h: b.h,
         clipped: b.clipped,
+        label: b.label,
         picks: b.picks,
         sizeRelaxed: b.ranking?.sizeRelaxed ?? false,
         candidates: (b.ranking?.candidates ?? []).map((c) => ({
@@ -118,14 +145,61 @@ export class Controller {
   }
 
   private rerank(box: TrackedBox): void {
-    box.ranking = rank(this.ds, this.profiles(), null, null, box.hits(), box.size)
+    const typeId = box.label !== null ? (this.ds.typeIds.get(box.label) ?? null) : null
+    box.ranking = rank(this.ds, this.profiles(), typeId, null, box.hits(), box.size)
   }
 
-  /** Grid que não pode ser o vendedor guardado: célula de outro tamanho (sem rótulos, só o tamanho decide). */
-  private otherScreen(scan: GridScan): boolean {
+  private rerankPicked(): void {
+    for (const box of this.session.boxes.values()) if (box.picks) this.rerank(box)
+  }
+
+  private newSession(): void {
+    this.session = new VendorSession()
+    this.votes.clear()
+  }
+
+  private seenLabels(): string[] {
+    return [...this.session.boxes.values()].flatMap((b) => (b.label !== null ? [b.label] : []))
+  }
+
+  /** Outra tela com grid (ex.: Recycling Station): tantas caixas com texto e nenhum rótulo de vendedor. */
+  private rejectedByText(readings: LabelReading[], anyLabel: boolean): boolean {
+    return this.labelsSeen && !anyLabel && readings.filter((x) => x.hasText).length >= MIN_TEXTS_TO_REJECT
+  }
+
+  /** Grid sem rótulo de vendedor que não pode ser o vendedor guardado: célula de outro tamanho ou, depois que a página
+   * leu rótulos, grid com texto quando o vendedor sumiu há tempo (a sessão seria trocada por ele). */
+  private otherScreen(scan: GridScan, readings: LabelReading[], anyLabel: boolean, t: number): boolean {
     const geom = this.session.geometry
-    if (this.session.boxes.size === 0 || geom === null) return false
-    return Math.abs(scan.geometry.pitch - geom.pitch) > OTHER_PITCH * geom.pitch
+    if (this.session.boxes.size === 0 || geom === null || anyLabel) return false
+    if (Math.abs(scan.geometry.pitch - geom.pitch) > OTHER_PITCH * geom.pitch) return true
+    return this.labelsSeen && readings.some((x) => x.hasText) && this.session.isExpired(t)
+  }
+
+  /** Cada leitura vota na caixa da sessão que ocupa o mesmo retângulo da tela. Os votos ficam na identidade da caixa
+   * (uid), que acompanha rolagem e reorganização; leitura diferente recomeça a contagem; categoria aceita não muda. */
+  private vote(readings: LabelReading[]): void {
+    const off = this.session.rowOffset
+    let accepted: TrackedBox | null = null
+    let count = 0
+    for (const r of readings) {
+      if (r.label === null) continue
+      const box = this.session.boxContaining(r.col, r.row + off)
+      if (!box || box.label !== null || box.col !== r.col || box.row !== r.row + off || box.w !== r.w || box.h !== r.h) continue
+      const v = this.votes.get(box.uid)
+      const n = v && v.label === r.label ? v.n + 1 : 1
+      this.votes.set(box.uid, { label: r.label, n })
+      if (n < VOTES_TO_ACCEPT) continue
+      box.label = r.label
+      this.votes.delete(box.uid)
+      this.labelsSeen = true
+      accepted = box
+      count++
+    }
+    if (count === 0) return
+    if (this.profileChoice === 'auto') this.rerankPicked() // os perfis podem ter mudado
+    else if (count === 1 && accepted!.picks) this.rerank(accepted!)
+    else this.rerankPicked()
   }
 
   /** Caixa com tamanho que nenhum item tem = algo cobre o grid (ou células vazias juntadas na borda): vira célula

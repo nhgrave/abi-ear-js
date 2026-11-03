@@ -3,6 +3,9 @@ import type { Dataset } from './data/dataset'
 
 export type ProfileOption = { profileId: number; label: string }
 
+/** Escolha do seletor: pelos rótulos das caixas, todos os mapas ou um perfil. */
+export type ProfileChoice = 'auto' | 'all' | number
+
 /** Uma opção por par mapa/modo dos perfis da base, rotulada "<mapName> <mode>", em ordem alfabética.
  * Perfis sem mapas ("Unknown Profile N") ficam só em "Todos os mapas". */
 export function profileOptions(ds: Dataset): ProfileOption[] {

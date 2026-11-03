@@ -10,6 +10,7 @@ export type BoxView = {
   w: number
   h: number
   clipped: boolean
+  label: string | null // categoria lida
   picks: number
   candidates: CandidateView[]
   sizeRelaxed: boolean

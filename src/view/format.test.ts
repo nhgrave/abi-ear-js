@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { boxDisplay, RARITY_COLORS } from './format'
 import type { BoxView } from '../engine/view'
 
-const box = (over: Partial<BoxView>): BoxView => ({ uid: 1, col: 0, row: 0, w: 2, h: 1, clipped: false, picks: 0, candidates: [], sizeRelaxed: false, ...over })
+const box = (over: Partial<BoxView>): BoxView => ({ uid: 1, col: 0, row: 0, w: 2, h: 1, clipped: false, label: null, picks: 0, candidates: [], sizeRelaxed: false, ...over })
 const cand = (name: string, pct: number, rarity = 5) => ({ itemId: 1, name, pct, rarity, icon: `data/icons/${name}.png` })
 
 describe('boxDisplay', () => {

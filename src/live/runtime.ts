@@ -125,7 +125,7 @@ export function createRuntime() {
       ds = new Dataset(await resp.json())
       controller = new Controller(ds)
       if (state.profileId !== null && !ds.profiles.has(state.profileId)) state.profileId = null
-      controller.setProfile(state.profileId)
+      controller.setProfile(state.profileId ?? 'all') // Task 5 da v0.2 troca pelo ProfileChoice
       state.dataVersion = ds.version
       state.syncedAt = ds.syncedAt
       refs = await decodeReferences(ds)
@@ -306,7 +306,7 @@ export function createRuntime() {
   function setProfile(id: number | null): void {
     state.profileId = id
     saveProfile(id)
-    controller?.setProfile(id)
+    controller?.setProfile(id ?? 'all')
     refresh()
   }
 

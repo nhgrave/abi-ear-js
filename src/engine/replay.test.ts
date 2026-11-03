@@ -71,7 +71,7 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
     for (const s of raw.sounds) matcher.addReference(s.id, readF32(fixturePath('sounds', `${s.pickup}.f32`)), s.pickup)
     const listener = new Listener(matcher)
     const controller = new Controller(ds)
-    controller.setProfile(null)
+    controller.setProfile('auto') // o padrão da página
     const pipeline = new FramePipeline()
     const picks = parseAppPicks(readFileSync(LOG!, 'latin1')).filter((p) => p.t >= frames[0].t && p.t <= frames[frames.length - 1].t)
     const counts: Record<string, number> = {}

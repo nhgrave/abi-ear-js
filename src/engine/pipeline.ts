@@ -6,11 +6,16 @@ import type { GridGeometry, GridScan } from './vision/types'
 
 export const SCAN_INTERVAL_MS = 350 // o mesmo intervalo de varredura do app desktop
 
+/** Leitura do rótulo de uma caixa inteira, em células da tela. `label` já normalizado (nome do tipo na base) ou null;
+ * `hasText`: havia texto na faixa do rótulo (rótulo ou não). */
+export type LabelReading = { col: number; row: number; w: number; h: number; label: string | null; hasText: boolean }
+
 export type FrameResult = {
   t: number
   cursor: CursorSample | null
   scan: GridScan | null | undefined // undefined: sem varredura neste quadro
   mean: number // média de cinza (quadro preto)
+  labels: LabelReading[] // vazio sem varredura ou sem leitor
 }
 
 /** O vendedor fica na metade direita da tela: sem OCR, é o que separa o grid dele do inventário. */
@@ -32,6 +37,6 @@ export class FramePipeline {
       this.lastGrid = found ? found.geometry : null
     }
     const cursor = this.cursor.find(gray, t, this.lastGrid ?? hint)
-    return { t, cursor, scan: found, mean: meanGray(gray) }
+    return { t, cursor, scan: found, mean: meanGray(gray), labels: [] }
   }
 }
