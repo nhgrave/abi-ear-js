@@ -55,7 +55,7 @@ category (game in English) and picks the map family by itself.
 
 ```bash
 npm ci
-npm run dev                    # http://127.0.0.1:5173/ (o gravador do protótipo fica em /spike/recorder/)
+npm run dev                    # http://127.0.0.1:5173/ (gravação: seção no fim da página, só neste modo)
 npm test && npm run typecheck && npm run build
 node scripts/sync-assets.mjs   # atualiza public/data/ (base, sons e ícones) quando o jogo muda
 ```
