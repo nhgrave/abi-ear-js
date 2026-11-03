@@ -4,11 +4,12 @@
 
 Descubra o que há dentro das caixas "Mysterious Supplies" do vendedor do Merchant Raid, em *Arena Breakout:
 Infinite*, pelo som de pegar a caixa e pela tela. Você abre o link, compartilha a tela com o áudio do sistema,
-escolhe o mapa e o modo e pega as caixas no vendedor. A página mostra, num grid espelhado, os itens prováveis de
-cada caixa, com a porcentagem de cada um.
+pega as caixas no vendedor. A página lê a categoria escrita em cada caixa, descobre a família de mapas sozinha e
+mostra, num grid espelhado, os itens prováveis de cada caixa, com a porcentagem de cada um.
 
 *English:* find out what's inside the Merchant Raid vendor boxes from the pickup sound and the screen. Open the
-link, share your entire screen with system audio, pick the map and mode, and drag the boxes at the vendor.
+link, share your entire screen with system audio, and drag the boxes at the vendor. The page reads each box's
+category (game in English) and picks the map family by itself.
 
 ## Como funciona
 
@@ -22,7 +23,12 @@ link, share your entire screen with system audio, pick the map and mode, and dra
 - **Qual caixa:** a página acha a seta do cursor do Windows no vídeo, entre 150 e 400 ms antes do som. Se a seta
   não estiver parada sobre uma caixa nesse intervalo, a pegada fica como "caixa não identificada" e a página não
   chuta.
-- **Itens:** o tamanho da caixa e o som filtram a base do Merchant, ponderada pelos pools do mapa e do modo escolhidos.
+- **Categoria:** a página lê o rótulo escrito no topo de cada caixa ("Energy Items", "Mystery Cargo"...), comparando
+  com modelos de imagem de cada categoria. A categoria só vale depois de duas leituras iguais, e na dúvida a caixa
+  fica sem categoria.
+- **Mapa:** no "Automático (pelos rótulos)", as categorias vistas no vendedor dizem a família de mapas. O seletor
+  continua lá para escolher o mapa e o modo à mão.
+- **Itens:** o tamanho da caixa, a categoria e o som filtram a base do Merchant, ponderada pelos pools dos mapas.
 
 ## Requisitos
 
@@ -33,9 +39,14 @@ link, share your entire screen with system audio, pick the map and mode, and dra
 - Cursor padrão do Windows, com escala de 100%.
 - Só 1920×1080 foi testado.
 
-## Limitações da v0.1
+## Limitações da v0.2
 
-- Sem leitura de texto (OCR): o mapa e o modo são escolhidos à mão, e o rótulo e o preço da caixa não entram na conta.
+- Só lê o jogo em **inglês**. Com o jogo em outro idioma a página funciona como a v0.1: sem categoria, e o mapa e o
+  modo escolhidos à mão (ou "Todos os mapas").
+- Os modelos de algumas categorias (Computer Parts, Electronics, Instruments, Military Items, Collectibles,
+  Uncommon Collectibles, Rare Mystery Cargo) saíram de uma só gravação. Uncommon Mystery Cargo de 3 de largura
+  ainda não tem modelo e fica sem categoria.
+- O preço do tooltip ainda não entra na conta.
 - Pegar e devolver caixas muito rápido ainda pode atribuir a pegada à caixa vizinha. Em visitas normais, 96% das
   pegadas com som saíram certas na gravação de teste.
 - O vendedor é procurado na metade direita da tela.
@@ -54,7 +65,17 @@ Os testes de paridade usam o gabarito exportado do app desktop (`abi-ear/tools/e
 protótipo é o teste de aceitação do motor:
 
 ```bash
-ABI_REPLAY=<pasta da gravação> ABI_APP_LOG=<abi-ear.log> ABI_REPLAY_OUT=replay.txt npx vitest run src/engine/replay.test.ts
+ABI_REPLAY=<pasta da gravação> ABI_APP_LOG=<abi-ear.log> ABI_LABEL_MODELS=public/data/labels/en.json \
+  ABI_REPLAY_OUT=replay.txt npx vitest run src/engine/replay.test.ts
+```
+
+Os modelos de rótulo (`public/data/labels/en.json`) saem das gravações e da categoria que o log do app desktop
+registrou em cada pegada:
+
+```bash
+ABI_LABEL_BUILD=<pastas de gravação, separadas por vírgula> ABI_APP_LOG=<abi-ear.log> \
+  ABI_LABEL_OUT=public/data/labels/en.json ABI_LABEL_MIN_SCORE=0.5 ABI_LABEL_MARGIN=0.15 \
+  npx vitest run src/engine/label-models.build.test.ts
 ```
 
 Cada push na `master` publica o site no GitHub Pages (`.github/workflows/pages.yml`).

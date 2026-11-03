@@ -10,6 +10,7 @@ defineProps<{ box: BoxView; locale: Locale }>()
   <aside class="details">
     <h2>{{ t('panel.title', locale) }}</h2>
     <p class="meta">{{ t('panel.size', locale) }}: {{ box.w }}x{{ box.h }}</p>
+    <p class="meta">{{ t('panel.category', locale) }}: {{ box.label ?? t('panel.categoryUnknown', locale) }}</p>
     <p v-if="box.picks === 0">{{ t('panel.notPicked', locale) }}</p>
     <p v-else-if="box.candidates.length === 0">{{ t('panel.none', locale) }}</p>
     <template v-else>

@@ -186,6 +186,14 @@ export class VendorSession {
 
   // ----- atualizações
 
+  /** Outra caixa do mesmo tamanho no lugar de `old` (a leitura do rótulo mostrou outra categoria): caixa nova, sem os
+   * dados da antiga. */
+  replaceBox(old: TrackedBox, label: string, nowMs: number): TrackedBox {
+    const box = new TrackedBox(old.col, old.row, old.w, old.h, old.clipped, { label, seenAt: nowMs })
+    this.boxes.set(old.key, box)
+    return box
+  }
+
   /** Deslocamento de linhas que encaixa o layout do scan no layout guardado, ou null. */
   private anchorOffset(scan: GridScan): number | null {
     const curr = scan.boxes.filter((b) => !b.clipped)
@@ -269,8 +277,9 @@ export class VendorSession {
     return Math.min(d, p - d) > PHASE_TOL * p
   }
 
-  /** Incorpora um scan. `labels` usa coordenadas de tela ("c,r") -> nome do tipo. */
-  applyScan(scan: GridScan, labels: Labels, nowMs: number): void {
+  /** Incorpora um scan. `labels` usa coordenadas de tela ("c,r") -> nome do tipo. Devolve false quando o scan fica
+   * aguardando confirmação (grid fora do reticulado, reorganização) e as caixas guardadas não mudam. */
+  applyScan(scan: GridScan, labels: Labels, nowMs: number): boolean {
     if (this.offLattice(scan.geometry)) {
       // a rolagem é animada: no meio dela o grid aparece fração de linha fora do lugar (ou é lido com
       // meia célula). Só vale se a próxima leitura confirmar (um aviso no topo da tela empurra o
@@ -282,7 +291,7 @@ export class VendorSession {
       if (!confirmed) {
         this.pendingGeometry = g
         this.lastSeen = nowMs
-        return
+        return false
       }
     }
     this.pendingGeometry = null
@@ -317,11 +326,11 @@ export class VendorSession {
         .join(';')
       if (scan.uncertain.size > 0 || layout !== this.pendingLayout) {
         this.pendingLayout = scan.uncertain.size > 0 ? null : layout
-        return
+        return false
       }
       this.pendingLayout = null
       this.realign(scan, labels, nowMs)
-      return
+      return true
     }
     this.pendingLayout = null
     for (const b of this.boxes.values()) {
@@ -417,6 +426,7 @@ export class VendorSession {
       }
       this.boxes.set(nw.key, nw)
     }
+    return true
   }
 
   /** Caixas inteiras do scan que caem sobre caixas guardadas de outra forma ou em outro lugar. */

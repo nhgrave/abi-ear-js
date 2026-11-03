@@ -1,7 +1,23 @@
-/** Opções do seletor de mapa e modo (v0.1: escolhido pelo jogador, sem modo automático). */
+/** Opções do seletor de mapa e modo, e os perfis que os rótulos das caixas indicam. */
 import type { Dataset } from './data/dataset'
 
 export type ProfileOption = { profileId: number; label: string }
+
+/** Escolha do seletor: pelos rótulos das caixas, todos os mapas ou um perfil. */
+export type ProfileChoice = 'auto' | 'all' | number
+
+/** Escolha salva no localStorage ('auto', 'all' ou o id) -> escolha. Sem nada salvo, ou com um perfil que a base
+ * não tem, vale o automático. O 'all' e os ids salvos pela v0.1 continuam valendo. */
+export function parseProfileChoice(v: string | null, ds?: Dataset): ProfileChoice {
+  if (v === 'all') return 'all'
+  if (v === null || !/^\d+$/.test(v)) return 'auto'
+  const id = Number(v)
+  return ds && !ds.profiles.has(id) ? 'auto' : id
+}
+
+export function profileChoiceValue(c: ProfileChoice): string {
+  return String(c)
+}
 
 /** Uma opção por par mapa/modo dos perfis da base, rotulada "<mapName> <mode>", em ordem alfabética.
  * Perfis sem mapas ("Unknown Profile N") ficam só em "Todos os mapas". */
@@ -21,4 +37,19 @@ export function profileOptions(ds: Dataset): ProfileOption[] {
 /** Todos os perfis, para "Todos os mapas" (como profiles_for_labels sem rótulos no Python). */
 export function allProfileIds(ds: Dataset): number[] {
   return [...ds.profiles.keys()].sort((a, b) => a - b)
+}
+
+/** Perfis compatíveis com os rótulos vistos no vendedor (profiles_for_labels). Fica quem explica mais rótulos (um
+ * rótulo lido errado não zera a lista); sem rótulos, ou sem casamento nenhum, todos. Nunca vazia. */
+export function profilesForLabels(ds: Dataset, labels: Iterable<string>): number[] {
+  const seen = new Set(labels)
+  const ids = allProfileIds(ds)
+  if (seen.size === 0) return ids
+  const explained = new Map<number, number>()
+  for (const pid of ids) {
+    const names = new Set(ds.pools.filter((p) => p.profile === pid).map((p) => ds.typeNames.get(p.typeId)))
+    explained.set(pid, [...seen].filter((l) => names.has(l)).length)
+  }
+  const best = Math.max(...explained.values())
+  return ids.filter((pid) => explained.get(pid) === best)
 }

@@ -5,7 +5,7 @@ import { rgbaToGray } from '../engine/vision/image'
 import type { GridGeometry } from '../engine/vision/types'
 import type { VisionIn, VisionOut } from './protocol'
 
-const pipeline = new FramePipeline()
+let pipeline = new FramePipeline()
 let canvas: OffscreenCanvas | null = null
 let ctx: OffscreenCanvasRenderingContext2D | null = null
 let hint: GridGeometry | null = null
@@ -44,6 +44,7 @@ async function readStream(readable: ReadableStream<VideoFrame>, originMs: number
 self.onmessage = (e: MessageEvent<VisionIn>) => {
   const m = e.data
   if (m.type === 'hint') hint = m.hint
+  else if (m.type === 'models') pipeline = new FramePipeline(m.models)
   else if (m.type === 'stream') void readStream(m.readable, m.originMs, m.intervalMs)
   else if (m.type === 'frame') {
     try {

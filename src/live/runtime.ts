@@ -2,6 +2,8 @@
 import { reactive } from 'vue'
 import { Controller, type PickupOutcome } from '../engine/controller'
 import { Dataset } from '../engine/data/dataset'
+import { parseProfileChoice, profileChoiceValue, type ProfileChoice } from '../engine/profiles'
+import type { LabelModels } from '../engine/vision/label-reader'
 import type { SessionView } from '../engine/view'
 import type { MessageKey } from '../i18n'
 import workletUrl from './audio-worklet.ts?worker&url'
@@ -24,7 +26,7 @@ export type RuntimeState = {
   problems: MessageKey[]
   health: { audio: Health; screen: Health; vendor: Health; cursor: Health }
   view: SessionView
-  profileId: number | null
+  profile: ProfileChoice
   lastPickup: LastPickup | null
   resolution: [number, number] | null
   dataVersion: string
@@ -33,18 +35,17 @@ export type RuntimeState = {
 
 const EMPTY_VIEW: SessionView = { geometry: null, rowOffset: 0, extent: [0, 0], boxes: [] }
 
-function readProfile(): number | null {
+function readProfile(): string | null {
   try {
-    const v = localStorage.getItem(PROFILE_KEY)
-    return v === null || v === 'all' ? null : Number(v)
+    return localStorage.getItem(PROFILE_KEY)
   } catch {
     return null
   }
 }
 
-function saveProfile(id: number | null): void {
+function saveProfile(c: ProfileChoice): void {
   try {
-    localStorage.setItem(PROFILE_KEY, id === null ? 'all' : String(id))
+    localStorage.setItem(PROFILE_KEY, profileChoiceValue(c))
   } catch {
     /* preferência é só conveniência */
   }
@@ -93,7 +94,7 @@ export function createRuntime() {
       cursor: { level: 'gray', reason: 'cursor.idle' },
     },
     view: EMPTY_VIEW,
-    profileId: readProfile(),
+    profile: parseProfileChoice(readProfile()),
     lastPickup: null,
     resolution: null,
     dataVersion: '?',
@@ -102,6 +103,7 @@ export function createRuntime() {
 
   let ds: Dataset | null = null
   let refs: Ref[] = []
+  let models: LabelModels | null = null
   let controller: Controller | null = null
   let live: Live | null = null
   let session = 0 // muda a cada start/stop: callbacks de uma sessão antiga não mexem na nova
@@ -123,9 +125,12 @@ export function createRuntime() {
       const resp = await fetch('data/merchant.json')
       if (!resp.ok) throw new Error(`base: HTTP ${resp.status}`)
       ds = new Dataset(await resp.json())
+      const labels = await fetch('data/labels/en.json')
+      if (!labels.ok) throw new Error(`modelos de rótulo: HTTP ${labels.status}`)
+      models = (await labels.json()) as LabelModels
       controller = new Controller(ds)
-      if (state.profileId !== null && !ds.profiles.has(state.profileId)) state.profileId = null
-      controller.setProfile(state.profileId)
+      state.profile = parseProfileChoice(readProfile(), ds) // perfil que a base não tem mais: automático
+      controller.setProfile(state.profile)
       state.dataVersion = ds.version
       state.syncedAt = ds.syncedAt
       refs = await decodeReferences(ds)
@@ -232,6 +237,7 @@ export function createRuntime() {
       // visão: quadros direto no worker (o timer da página é desacelerado quando o jogo está na frente)
       const visionWorker = (l.visionWorker = new Worker(new URL('./vision.worker.ts', import.meta.url), { type: 'module' }))
       visionWorker.onerror = () => token === session && fail('problem.worker')
+      if (models) visionWorker.postMessage({ type: 'models', models } satisfies VisionIn) // antes dos quadros
       let busy = false
       visionWorker.onmessage = (e: MessageEvent<VisionOut>) => {
         busy = false
@@ -303,10 +309,10 @@ export function createRuntime() {
     updateHealth() // a sessão fica no Controller até recarregar a página
   }
 
-  function setProfile(id: number | null): void {
-    state.profileId = id
-    saveProfile(id)
-    controller?.setProfile(id)
+  function setProfile(c: ProfileChoice): void {
+    state.profile = c
+    saveProfile(c)
+    controller?.setProfile(c)
     refresh()
   }
 
