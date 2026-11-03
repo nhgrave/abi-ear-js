@@ -12,14 +12,16 @@ export const DISPLAY_MEDIA_OPTIONS = {
   },
   systemAudio: 'include',
   monitorTypeSurfaces: 'include',
-} as DisplayMediaStreamOptions & { systemAudio?: string; monitorTypeSurfaces?: string }
+  // janela compartilhada: pede só o áudio dela (sem o Discord e outros sons do sistema), onde o Chrome suporta
+  windowAudio: 'window',
+} as DisplayMediaStreamOptions & { systemAudio?: string; monitorTypeSurfaces?: string; windowAudio?: string }
 
-/** Problemas que impedem seguir (equivalente ao streamProblems do gravador, em chaves de mensagem). */
+/** Problemas que impedem seguir. Vale a tela inteira (com o áudio do sistema) ou a janela do jogo com o áudio dela;
+ * aba do navegador não. */
 export function streamProblemKeys(s: { audioTracks: number; displaySurface?: string }): MessageKey[] {
-  const problems: MessageKey[] = []
-  if (s.displaySurface && s.displaySurface !== 'monitor') problems.push('problem.notMonitor')
-  if (s.audioTracks < 1) problems.push('problem.noAudio')
-  return problems
+  if (s.displaySurface === 'browser') return ['problem.notMonitor']
+  if (s.audioTracks < 1) return [s.displaySurface === 'window' ? 'problem.noWindowAudio' : 'problem.noAudio']
+  return []
 }
 
 /** Instante (ms de performance.now) da amostra `frame` do AudioContext, pelo par de getOutputTimestamp.
