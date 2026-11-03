@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "vite build"
+    "build": "vite build && node scripts/check-dist.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
