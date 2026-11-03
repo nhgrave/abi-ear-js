@@ -60,9 +60,15 @@ npm test && npm run typecheck && npm run build
 node scripts/sync-assets.mjs   # atualiza public/data/ (base, sons e ícones) quando o jogo muda
 ```
 
+**Gravar uma sessão** (só com `npm run dev`; o build publicado não tem gravação, e `npm run build` falha se algo
+dela vazar para o `dist/`): na seção "Gravação (modo local)", no fim da página, escolha uma pasta do PC uma vez (ela
+fica lembrada), inicie o compartilhamento e clique em Gravar. Cada gravação vira uma subpasta `AAAA-MM-DD-HHMMSS` com
+`session.json`, `audio.wav` e `frames/*.jpg`. O histórico lista as gravações da pasta e copia o nome de cada uma. As
+gravações ficam só no PC.
+
 Os testes de paridade usam o gabarito exportado do app desktop (`abi-ear/tools/export_golden.py`) para
-`tests/fixtures/`, que fica fora do git. Sem ele, esses testes são pulados. O replay de uma gravação real do
-protótipo é o teste de aceitação do motor:
+`tests/fixtures/`, que fica fora do git. Sem ele, esses testes são pulados. O replay de uma gravação real é o teste
+de aceitação do motor:
 
 ```bash
 ABI_REPLAY=<pasta da gravação> ABI_APP_LOG=<abi-ear.log> ABI_LABEL_MODELS=public/data/labels/en.json \
