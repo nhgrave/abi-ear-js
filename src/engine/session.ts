@@ -15,6 +15,7 @@ export const RESTORE_WINDOW_MS = 60000 // caixa removida com resultado: volta a 
 export const REFLOW_MIN_CONFLICTS = 2 // caixas vistas sobre caixas guardadas diferentes: o estoque se reorganizou
 export const REFLOW_MAX_SIZE_CHANGE = 0.2 // o estoque é ordenado por tamanho: rolar muda os tamanhos à vista, uma
 // compra quase não (até 2 caixas ou esta fração delas)
+export const SUSPECT_MAX_MS = 8000 // leitura com forma suspeita (item levantado, tooltip) que dura isto passa a valer
 export const EDGE_TOL = 0.1 // clique até esta fração de célula além da borda esquerda/direita conta na coluna da borda
 
 let nextUid = 1
@@ -131,6 +132,7 @@ export class VendorSession {
   private pendingGeometry: GridGeometry | null = null // grid fora do reticulado aguardando confirmação
   private removed = new Map<string, [number, TrackedBox]>() // chave -> (quando, caixa)
   private pendingLayout: string | null = null // reorganização aguardando confirmação
+  private suspects = new Map<string, number>() // forma suspeita "c,r,w,h" (conteúdo) -> desde quando aparece
 
   // ----- consultas
 
@@ -284,9 +286,11 @@ export class VendorSession {
     return Math.min(d, p - d) > PHASE_TOL * p
   }
 
-  /** Incorpora um scan. `labels` usa coordenadas de tela ("c,r") -> nome do tipo. Devolve false quando o scan fica
-   * aguardando confirmação (grid fora do reticulado, reorganização) e as caixas guardadas não mudam. */
-  applyScan(scan: GridScan, labels: Labels, nowMs: number): boolean {
+  /** Incorpora um scan. `labels` usa coordenadas de tela ("c,r") -> nome do tipo. `hints`: rótulos lidos neste quadro,
+   * no mesmo formato, que só ajudam a reconhecer as caixas numa reorganização (não viram categoria: isso é com a
+   * votação do Controller). Devolve false quando o scan fica aguardando confirmação (grid fora do reticulado,
+   * reorganização) e as caixas guardadas não mudam. */
+  applyScan(scan: GridScan, labels: Labels, nowMs: number, hints: Labels = labels): boolean {
     if (this.offLattice(scan.geometry)) {
       // a rolagem é animada: no meio dela o grid aparece fração de linha fora do lugar (ou é lido com
       // meia célula). Só vale se a próxima leitura confirmar (um aviso no topo da tela empurra o
@@ -312,6 +316,7 @@ export class VendorSession {
     this.lastSeen = nowMs
 
     const off = this.rowOffset
+    scan = this.withoutSuspects(scan, nowMs)
     const top = off
     const bottom = off + scan.geometry.rows
     const uncertain = new Set([...scan.uncertain].map((key) => {
@@ -336,7 +341,7 @@ export class VendorSession {
         return false
       }
       this.pendingLayout = null
-      this.realign(scan, labels, nowMs)
+      this.realign(scan, labels, nowMs, hints)
       return true
     }
     this.pendingLayout = null
@@ -436,6 +441,44 @@ export class VendorSession {
     return true
   }
 
+  /** O scan sem as caixas com forma de leitura errada, que viram células incertas (as guardadas ficam):
+   * - menor e dentro de uma caixa guardada cujo resto não tem caixa: o item levantado deixa o lugar vazio com uma
+   *   célula vermelha, lida como caixa;
+   * - exatamente a junção de duas ou mais caixas guardadas: o tooltip esconde a divisória entre elas.
+   * A mesma forma por SUSPECT_MAX_MS passa a valer (a caixa guardada é que estava errada). */
+  private withoutSuspects(scan: GridScan, nowMs: number): GridScan {
+    const off = this.rowOffset
+    const stored = [...this.boxes.values()].filter((b) => !b.clipped)
+    const cellsOf = (r: BoxRect) => new Set(boxCells({ ...r, row: r.row + off }).map(([c, row]) => cellKey(c, row)))
+    const scanCells = scan.boxes.map(cellsOf)
+    const suspects = new Map<string, number>()
+    const drop = new Set<BoxRect>()
+    scan.boxes.forEach((rect, i) => {
+      if (rect.clipped) return
+      const cells = scanCells[i]
+      const row = rect.row + off
+      if (stored.some((b) => b.col === rect.col && b.row === row && b.w === rect.w && b.h === rect.h)) return
+      const lifted = stored.some((b) => {
+        const inside = b.col <= rect.col && rect.col + rect.w <= b.col + b.w && b.row <= row && row + rect.h <= b.row + b.h
+        if (!inside) return false
+        const rest = [...b.cells()].filter((k) => !cells.has(k))
+        return !scanCells.some((other, j) => j !== i && rest.some((k) => other.has(k)))
+      })
+      const parts = stored.filter((b) => [...b.cells()].every((k) => cells.has(k)))
+      const merged = parts.length >= 2 && parts.reduce((n, b) => n + b.w * b.h, 0) === cells.size
+      if (!lifted && !merged) return
+      const key = `${rect.col},${row},${rect.w},${rect.h}`
+      const since = this.suspects.get(key) ?? nowMs
+      suspects.set(key, since)
+      if (nowMs - since < SUSPECT_MAX_MS) drop.add(rect)
+    })
+    this.suspects = suspects
+    if (drop.size === 0) return scan
+    const uncertain = new Set(scan.uncertain)
+    for (const r of drop) for (const [c, row] of boxCells(r)) uncertain.add(cellKey(c, row))
+    return { ...scan, boxes: scan.boxes.filter((b) => !drop.has(b)), uncertain }
+  }
+
   /** Caixas inteiras do scan que caem sobre caixas guardadas de outra forma ou em outro lugar. A caixa que volta igual
    * ao lugar de onde saiu há pouco não conta: é a leitura errada (tooltip, arrasto) se desfazendo, não uma compra. */
   private conflicts(scan: GridScan, inView: ReadonlyMap<string, TrackedBox>, nowMs: number): number {
@@ -457,7 +500,7 @@ export class VendorSession {
    *
    * Caixas guardadas à vista que não acharam lugar foram compradas, ou ficaram ambíguas: saem. As de
    * fora da vista ficam, marcadas como de posição incerta até voltarem à vista. */
-  private realign(scan: GridScan, labels: Labels, nowMs: number): void {
+  private realign(scan: GridScan, labels: Labels, nowMs: number, hints: Labels): void {
     const off = this.rowOffset
     const top = off
     const bottom = off + scan.geometry.rows
@@ -470,7 +513,9 @@ export class VendorSession {
     for (const size of new Set(whole.map((b) => `${b.w},${b.h}`))) {
       const nw = whole.filter((b) => `${b.w},${b.h}` === size).sort(readingOrder)
       const old = stored.filter((b) => `${b.w},${b.h}` === size).sort(readingOrder)
-      const sources = align(old, nw, top, bottom, top > 0)
+      // a caixa nova ainda sem categoria se reconhece pelo rótulo lido agora (entre iguais, diz qual saiu)
+      const seen = nw.map((b) => ({ col: b.col, row: b.row, h: b.h, label: b.label ?? hints.get(cellKey(b.col, b.row - off)) ?? null }))
+      const sources = align(old, seen, top, bottom, top > 0)
       nw.forEach((box, i) => {
         const src = sources[i]
         if (src !== null) {

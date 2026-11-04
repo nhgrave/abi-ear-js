@@ -296,3 +296,54 @@ it('boxes merged under a tooltip come back with their labels', () => {
   expect(get(s, '0,0').label).toBe('Computer Parts') // as outras não passam por reorganização
   expect(get(s, '3,1').label).toBe('Mystery Cargo')
 })
+
+it('purchase among same-size boxes is aligned by the labels read in the frame', () => {
+  // comprada a 2ª das 1x1: as seguintes andam uma casa. Sem rótulo, qualquer 1x1 pode ter saído; com o rótulo lido no
+  // quadro (só dica, não vira categoria), só a Collectibles
+  const ones = [0, 1, 2, 3, 4].map((c) => box(c, 0, 1, 1))
+  const before = [...ones, box(5, 0, 1, 2), box(6, 0, 1, 2), box(7, 0, 1, 2), box(8, 0, 1, 2), box(0, 1, 1, 2), box(1, 1, 2, 1), box(3, 1, 2, 1)]
+  const after = [...ones.slice(0, 4), box(4, 0, 1, 2), box(5, 0, 1, 2), box(6, 0, 1, 2), box(7, 0, 1, 2), box(8, 0, 1, 2), box(0, 1, 2, 1), box(2, 1, 2, 1)]
+  const cats = ['Uncommon Mystery Cargo', 'Collectibles', 'Instruments', 'Instruments', 'Mystery Cargo']
+  const s = new VendorSession()
+  s.applyScan(makeScan(before), labelMap(cats.map((l, c) => [c, 0, l])), 0)
+  get(s, '2,0').addHits([hit(1, 0.9)])
+  get(s, '4,0').addHits([hit(2, 0.9)])
+  const read = labelMap(cats.filter((l) => l !== 'Collectibles').map((l, c) => [c, 0, l]))
+  s.applyScan(makeScan(after), NONE, 500, read)
+  s.applyScan(makeScan(after), NONE, 1000, read)
+  expect(get(s, '1,0').picks).toBe(1) // a Instruments que estava em (2, 0)
+  expect(get(s, '3,0').picks).toBe(1) // a Mystery Cargo que estava em (4, 0)
+  expect(get(s, '3,0').label).toBe('Mystery Cargo')
+  expect(get(s, '0,0').label).toBe('Uncommon Mystery Cargo')
+})
+
+it('lifted box read as a smaller box inside it keeps the stored box', () => {
+  // o item levantado deixa o lugar vazio com uma célula vermelha: a pegada tem que cair na caixa guardada
+  const s = new VendorSession()
+  s.applyScan(makeScan(LAYOUT), LABELS, 0)
+  const uid = get(s, '0,0').uid
+  s.applyScan(makeScan([box(1, 1, 1, 1), B, C, D, E]), NONE, 500)
+  expect(s.boxAtScreen(64 + 10, 64 + 10)!.uid).toBe(uid)
+  expect(s.boxes.has('1,1')).toBe(false)
+})
+
+it('two boxes read as one keep their identity while merged', () => {
+  const top = box(6, 0, 2, 1)
+  const bottom = box(6, 1, 2, 2)
+  const layout = [A, B, C, D, top, bottom]
+  const s = new VendorSession()
+  s.applyScan(makeScan(layout), LABELS, 0)
+  const [u1, u2] = [get(s, '6,0').uid, get(s, '6,1').uid]
+  s.applyScan(makeScan([A, B, C, D, box(6, 0, 2, 3)]), NONE, 500)
+  expect(s.boxAtScreen(6 * 64 + 10, 10)!.uid).toBe(u1)
+  expect(s.boxAtScreen(6 * 64 + 10, 2 * 64 + 10)!.uid).toBe(u2)
+})
+
+it('smaller box that stays for long is accepted', () => {
+  // a caixa guardada estava errada (lida grande demais): uma leitura que se mantém por muito tempo vale
+  const s = new VendorSession()
+  s.applyScan(makeScan(LAYOUT), LABELS, 0)
+  for (let t = 500; t <= 10000; t += 500) s.applyScan(makeScan([box(1, 1, 1, 1), B, C, D, E]), NONE, t)
+  expect(get(s, '1,1').w).toBe(1)
+  expect(s.boxes.has('0,0')).toBe(false)
+})

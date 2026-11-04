@@ -96,7 +96,9 @@ export class Controller {
     }
     this.vendorVisible = true
     // só vota quando a sessão aplicou o scan: aguardando confirmação, as posições guardadas são as do layout anterior
-    if (this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t)) this.vote(readings, r.t)
+    // os rótulos do quadro só ajudam a reconhecer as caixas numa reorganização; a categoria vem da votação
+    const hints = new Map(readings.flatMap((x) => (x.label !== null ? [[cellKey(x.col, x.row), x.label] as const] : [])))
+    if (this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t, hints)) this.vote(readings, r.t)
   }
 
   onPickup(e: Pickup): PickupOutcome {
