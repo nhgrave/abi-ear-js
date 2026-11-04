@@ -1,13 +1,13 @@
 {
   "name": "abi-ear-js",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "vite build"
+    "build": "vite build && node scripts/check-dist.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

@@ -3,3 +3,4 @@ dist*
 tests/fixtures/
 .superpowers/
 .claude/
+.houston/

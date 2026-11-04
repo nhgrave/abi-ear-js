@@ -55,17 +55,25 @@ category (game in English) and picks the map family by itself.
 
 ```bash
 npm ci
-npm run dev                    # http://127.0.0.1:5173/ (o gravador do protótipo fica em /spike/recorder/)
+npm run dev                    # http://127.0.0.1:5173/ (gravação: seção no fim da página, só neste modo)
 npm test && npm run typecheck && npm run build
 node scripts/sync-assets.mjs   # atualiza public/data/ (base, sons e ícones) quando o jogo muda
 ```
 
+**Gravar uma sessão** (só com `npm run dev` e só no Google Chrome, porque o Brave vem sem o seletor de pasta; o build publicado não tem gravação, e `npm run build` falha se algo
+dela vazar para o `dist/`): na seção "Gravação (modo local)", no fim da página, escolha uma pasta do PC uma vez (ela
+fica lembrada), escolha os quadros por segundo (10, 15 ou 30), inicie o compartilhamento e clique em Gravar. Cada
+gravação vira uma subpasta `AAAA-MM-DD-HHMMSS` com `session.json`, `audio.wav`, `frames/*.jpg` e `events.jsonl` (o que
+a análise ao vivo fez: pegadas, indicadores e avisos, mais os erros do console). O histórico lista as gravações da
+pasta, com os quadros salvos por segundo, e copia o nome de cada uma. As gravações ficam só no PC.
+
 Os testes de paridade usam o gabarito exportado do app desktop (`abi-ear/tools/export_golden.py`) para
-`tests/fixtures/`, que fica fora do git. Sem ele, esses testes são pulados. O replay de uma gravação real do
-protótipo é o teste de aceitação do motor:
+`tests/fixtures/`, que fica fora do git. Sem ele, esses testes são pulados. O replay de uma gravação real é o teste
+de aceitação do motor. Ele compara com o `events.jsonl` da gravação, quando ela tem um, e com o log do app desktop
+só se `ABI_APP_LOG` for passado (o critério estrito vale só com o log do app):
 
 ```bash
-ABI_REPLAY=<pasta da gravação> ABI_APP_LOG=<abi-ear.log> ABI_LABEL_MODELS=public/data/labels/en.json \
+ABI_REPLAY=<pasta da gravação> [ABI_APP_LOG=<abi-ear.log>] ABI_LABEL_MODELS=public/data/labels/en.json \
   ABI_REPLAY_OUT=replay.txt npx vitest run src/engine/replay.test.ts
 ```
 

@@ -6,8 +6,9 @@ export type SoundHit = { soundId: number; score: number }
 export type Candidate = { item: Item; pct: number } // pct 0..100
 export type Ranking = { candidates: Candidate[]; sizeRelaxed: boolean } // sizeRelaxed: o filtro de tamanho zerou a lista e foi ignorado
 
+/** O vendedor mostra cada item como está na base, sem girar (o app desktop aceita girado). */
 export function fits(itemSize: [number, number], boxSize: [number, number]): boolean {
-  return (itemSize[0] === boxSize[0] && itemSize[1] === boxSize[1]) || (itemSize[0] === boxSize[1] && itemSize[1] === boxSize[0])
+  return itemSize[0] === boxSize[0] && itemSize[1] === boxSize[1]
 }
 
 /** P(item) = média nos perfis de Σ pools (peso do pool / total do perfil) × (peso do item / total do pool). */

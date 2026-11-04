@@ -268,3 +268,31 @@ it('scan read with half cells is not applied', () => {
   expect(s.rowOffset).toBe(0)
   expect(get(s, '0,0').label).toBe('Computer Parts')
 })
+
+it('labelled box misread while dragged gets its label back', () => {
+  // arrastando uma caixa 2x2, o lugar dela fica vazio com uma célula destacada, lida como uma caixa 1x1
+  const s = new VendorSession()
+  s.applyScan(makeScan(LAYOUT), LABELS, 0)
+  const uid = get(s, '0,0').uid
+  s.applyScan(makeScan([box(1, 1, 1, 1), B, C, D, E]), NONE, 500)
+  s.applyScan(makeScan(LAYOUT), NONE, 1000) // devolvida ao lugar
+  expect(get(s, '0,0').label).toBe('Computer Parts')
+  expect(get(s, '0,0').uid).toBe(uid)
+})
+
+it('boxes merged under a tooltip come back with their labels', () => {
+  // o tooltip na borda direita esconde a linha entre duas caixas, lidas como uma só por alguns segundos
+  const top = box(6, 0, 2, 1)
+  const bottom = box(6, 1, 2, 2)
+  const layout = [A, B, C, D, top, bottom]
+  const labels = labelMap([[0, 0, 'Computer Parts'], [2, 0, 'Collectibles'], [3, 1, 'Mystery Cargo'], [0, 3, 'Electronics'], [6, 0, 'Tools'], [6, 1, 'Medical Supplies']])
+  const s = new VendorSession()
+  s.applyScan(makeScan(layout), labels, 0)
+  for (const t of [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000]) s.applyScan(makeScan([A, B, C, D, box(6, 0, 2, 3)]), NONE, t)
+  s.applyScan(makeScan(layout), NONE, 4500)
+  s.applyScan(makeScan(layout), NONE, 5000)
+  expect(get(s, '6,0').label).toBe('Tools')
+  expect(get(s, '6,1').label).toBe('Medical Supplies')
+  expect(get(s, '0,0').label).toBe('Computer Parts') // as outras não passam por reorganização
+  expect(get(s, '3,1').label).toBe('Mystery Cargo')
+})

@@ -9,6 +9,7 @@ import type { MessageKey } from '../i18n'
 import workletUrl from './audio-worklet.ts?worker&url'
 import { LABEL_MODELS_URL, loadLabelModels } from './label-data'
 import { audioTimeMs, DISPLAY_MEDIA_OPTIONS, outputTimestamp, streamProblemKeys } from './capture'
+import { LiveEvents, pickupEvent, type LiveEvent } from './live-events'
 import { audioHealth, cursorHealth, screenHealth, vendorHealth, type Health } from './health'
 import type { AudioIn, AudioOut, VisionIn, VisionOut } from './protocol'
 
@@ -116,6 +117,9 @@ export function createRuntime() {
   let means: [number, number][] = []
   let scores: number[] = []
   let nearMisses: number[] = []
+  const events = new LiveEvents()
+  const soundName = (id: number) => ds?.sounds.get(id)?.pickup ?? String(id)
+  const publishState = () => events.state(performance.timeOrigin + performance.now(), state.health, state.problems)
 
   const refresh = () => {
     if (controller) state.view = controller.view()
@@ -143,7 +147,9 @@ export function createRuntime() {
   }
 
   function onPickupOutcome(out: PickupOutcome): void {
-    const sound = ds!.sounds.get(out.event.soundId)?.pickup ?? String(out.event.soundId)
+    const sound = soundName(out.event.soundId)
+    const box = out.kind === 'assigned' ? (controller?.session.boxByUid(out.uid) ?? null) : null
+    events.emit(pickupEvent(out, sound, box, performance.timeOrigin))
     state.lastPickup = { sound, score: out.event.score, outcome: out.kind, reason: out.kind === 'unassigned' ? out.reason : null }
     if (out.kind === 'unassigned' && out.reason === 'no-cursor') lastNoCursorMs = performance.now()
     refresh()
@@ -159,6 +165,7 @@ export function createRuntime() {
       vendor: vendorHealth({ lastSeen: state.sharing ? (controller?.session.lastSeen ?? null) : null, now, sharingSinceMs: sharingSince }),
       cursor: cursorHealth({ vendorVisible, lastArrowMs: controller?.lastArrowMs ?? null, now, lastNoCursorMs }),
     }
+    publishState()
   }
 
   function fail(problem: MessageKey): void {
@@ -207,8 +214,10 @@ export function createRuntime() {
       audioWorker.onmessage = (e: MessageEvent<AudioOut>) => {
         if (token !== session || e.data.type !== 'events') return
         for (const ev of e.data.events) {
-          if (ev.kind === 'near-miss') nearMisses = [...nearMisses.filter((t) => ev.t - t <= 60_000), ev.t]
-          else {
+          if (ev.kind === 'near-miss') {
+            nearMisses = [...nearMisses.filter((t) => ev.t - t <= 60_000), ev.t]
+            events.emit({ type: 'near-miss', t: performance.timeOrigin + ev.t, sound: soundName(ev.soundId), score: ev.score })
+          } else {
             scores = [...scores.slice(-9), ev.score]
             onPickupOutcome(controller!.onPickup(ev))
           }
@@ -288,6 +297,7 @@ export function createRuntime() {
       if (token === session) fail('problem.start')
     } finally {
       state.starting = false
+      publishState() // avisos de um começo que falhou
     }
   }
 
@@ -322,7 +332,13 @@ export function createRuntime() {
     refresh()
   }
 
-  return { state, load, start, stop, setProfile, clear, dataset: () => ds }
+  /** O stream compartilhado agora (o gravador do modo local usa o mesmo). */
+  const stream = (): MediaStream | null => live?.stream ?? null
+
+  /** Assina o que a análise ao vivo faz (pegadas, saúde, avisos); devolve o cancelamento. */
+  const onEvent = (fn: (e: LiveEvent) => void): (() => void) => events.on(fn)
+
+  return { state, load, start, stop, setProfile, clear, dataset: () => ds, stream, onEvent }
 }
 
 export type Runtime = ReturnType<typeof createRuntime>

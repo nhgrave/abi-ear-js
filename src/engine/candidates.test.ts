@@ -7,8 +7,12 @@ const PROFILE = 5 // Northridge/TV Station/Airport Forbidden — o mapa do víde
 const names = (r: Ranking) => r.candidates.map((c) => c.item.name)
 const sum = (xs: Iterable<number>) => [...xs].reduce((a, b) => a + b, 0)
 
-it('fits accepts rotation', () => {
-  expect(fits([1, 2], [1, 2]) && fits([1, 2], [2, 1]) && !fits([2, 2], [1, 2])).toBe(true)
+it('fits needs the item standing as the vendor shows it', () => {
+  // o vendedor não gira os itens: nas 1122 pegadas do log do app desktop, 86 só cabiam no tamanho do item como está
+  // na base e 1 só girado
+  expect(fits([1, 2], [1, 2])).toBe(true)
+  expect(fits([1, 2], [2, 1])).toBe(false)
+  expect(fits([2, 2], [1, 2])).toBe(false)
 })
 
 it('zero weights and missing profile do not crash', () => {
@@ -51,9 +55,19 @@ describe.skipIf(!hasFixtures('merchant.json'))('with the merchant data', () => {
     expect(names(r)).toEqual(['Desk Clock'])
   })
 
-  it('rotated box still matches', () => {
+  it('box lying down does not match an item standing up', () => {
+    // Titanium Alloy Plate é 2x3: aparecia também nas caixas 3x2 com o mesmo som
+    const standing = rank(ds, [PROFILE], null, null, [{ soundId: 6, score: 0.9 }], [2, 3])
+    const lying = rank(ds, [PROFILE], null, null, [{ soundId: 6, score: 0.9 }], [3, 2])
+    expect(names(standing)).toContain('Titanium Alloy Plate')
+    expect(names(lying)).not.toContain('Titanium Alloy Plate')
+    expect(lying.sizeRelaxed).toBe(false)
+  })
+
+  it('box no item fits in its orientation falls back to any size', () => {
     const r = rank(ds, [PROFILE], type('Uncommon Collectibles'), 250000, [{ soundId: 31, score: 0.95 }], [2, 1])
     expect(names(r)).toEqual(['Desk Clock'])
+    expect(r.sizeRelaxed).toBe(true)
   })
 
   it('ambiguous result lists all and sums 100', () => {

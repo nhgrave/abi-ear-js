@@ -29,7 +29,9 @@ Para validar os modelos que saíram de uma só gravação (2026-11-02-185459) e 
 
 ## 3. v0.2.1: gravação na página, só em modo local
 
-Pedido do autor em 02/11. Passa por design e plano próprios.
+Pedido do autor em 02/11. Implementada em 03/11 na branch `v0.2.1` (spec `specs/2026-11-03-v0.2.1-dev-recording-design.md`,
+plano `plans/2026-11-03-v0.2.1-dev-recording.md`). Falta o roteiro manual do autor (Task 6, Step 6 do plano) antes do
+merge na `master`.
 
 - Tirar a rota `/spike/recorder/` (página e entrada no `vite.config.ts`).
 - Gravar pela tela principal: quadros e áudio no formato que o replay e o construtor de modelos leem

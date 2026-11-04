@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import AppFooter from './components/AppFooter.vue'
 import BoxDetails from './components/BoxDetails.vue'
 import Indicators from './components/Indicators.vue'
@@ -25,6 +25,8 @@ const setLocale = (l: Locale) => {
   document.documentElement.lang = l === 'pt' ? 'pt-BR' : 'en'
   try { localStorage.setItem(LOCALE_KEY, l) } catch { /* sem armazenamento */ }
 }
+// gravação: só com npm run dev; o Vite remove este ramo (e o chunk) do build publicado
+const DevRecorder = import.meta.env.DEV ? defineAsyncComponent(() => import('./dev/DevRecorder.vue')) : null
 const rt = createRuntime()
 const s = rt.state
 const selected = ref<number | null>(null)
@@ -68,6 +70,7 @@ onMounted(() => {
       <BoxDetails v-if="selectedBox" :box="selectedBox" :locale="locale" />
     </main>
 
+    <component :is="DevRecorder" v-if="DevRecorder" :sharing="s.sharing" :get-stream="rt.stream" :subscribe="rt.onEvent" />
     <AppFooter :last-pickup="s.lastPickup" :version="s.dataVersion" :synced-at="s.syncedAt" :resolution="s.resolution" :locale="locale" />
   </div>
 </template>
