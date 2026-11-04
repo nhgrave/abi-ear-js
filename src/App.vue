@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import AppFooter from './components/AppFooter.vue'
 import BoxDetails from './components/BoxDetails.vue'
 import Indicators from './components/Indicators.vue'
@@ -32,10 +32,26 @@ const s = rt.state
 const selected = ref<number | null>(null)
 const options = computed(() => (s.loading || !rt.dataset() ? [] : profileOptions(rt.dataset()!)))
 const selectedBox = computed(() => s.view.boxes.find((b) => b.uid === selected.value) ?? null)
+// a caixa que acabou de ser pega aparece no painel sem precisar clicar
+watch(
+  () => s.lastPickup,
+  (p) => {
+    if (p?.uid != null) selected.value = p.uid
+  },
+)
+const helpLines = ['help.pick', 'help.category', 'help.color', 'help.badge', 'help.dashed'] as const
 
-onMounted(() => {
+onMounted(async () => {
   setLocale(locale.value)
-  void rt.load()
+  await rt.load()
+  // prévia do layout sem o jogo (?preview): só com npm run dev, como a gravação
+  // (?preview=help: sem caixa selecionada)
+  const preview = import.meta.env.DEV ? new URLSearchParams(location.search).get('preview') : null
+  if (preview !== null && rt.dataset()) {
+    const { previewView } = await import('./dev/preview')
+    s.view = previewView(rt.dataset()!)
+    if (preview !== 'help') selected.value = s.view.boxes.find((b) => b.picks > 0 && b.candidates.length > 1)?.uid ?? null
+  }
 })
 </script>
 
@@ -68,6 +84,12 @@ onMounted(() => {
     <main class="main">
       <VendorGrid :view="s.view" :selected="selected" @select="(uid) => (selected = uid)" />
       <BoxDetails v-if="selectedBox" :box="selectedBox" :locale="locale" />
+      <aside v-else-if="s.view.boxes.length" class="help">
+        <h2>{{ t('help.title', locale) }}</h2>
+        <ul>
+          <li v-for="k in helpLines" :key="k">{{ t(k, locale) }}</li>
+        </ul>
+      </aside>
     </main>
 
     <component :is="DevRecorder" v-if="DevRecorder" :sharing="s.sharing" :get-stream="rt.stream" :subscribe="rt.onEvent" />
@@ -90,13 +112,18 @@ button:disabled { opacity: 0.5; cursor: default; }
 </style>
 
 <style scoped>
-.page { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+.page { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .top { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
 h1 { margin: 0; font-size: 22px; }
 .tagline { margin: 2px 0 0; color: var(--muted); font-size: 14px; max-width: 46ch; }
 .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .lang { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px; font: inherit; }
 .problems { margin: 0; padding: 10px 16px 10px 32px; background: #3a1f1f; border: 1px solid var(--red); border-radius: 8px; }
-.main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; }
+/* grid do tamanho do jogo em 1080p (células de 64 px) quando cabe; o painel fica com o resto */
+.main { display: grid; grid-template-columns: minmax(0, 578px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.help { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; color: var(--muted); font-size: 13px; }
+.help h2 { font-size: 16px; margin: 0 0 6px; color: var(--text); }
+.help ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.help li:first-child { color: var(--text); }
 @media (max-width: 760px) { .main { grid-template-columns: minmax(0, 1fr); } }
 </style>

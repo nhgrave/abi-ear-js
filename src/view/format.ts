@@ -11,14 +11,16 @@ export type BoxDisplay = {
   count: number // candidatos: mais de um vira o selo "⧉ N"
   color: string | null // raridade do item mais provável; null antes de pegar
   icon: string | null // item certo: a imagem no lugar do texto
+  hint: boolean // ainda não pega: o texto é a categoria lida (apagado), não um item
 }
 
 const FULL_PCT = 99.5 // arredonda para 100%: mostra a imagem do item
 
 export function boxDisplay(b: BoxView): BoxDisplay {
-  if (b.picks === 0) return { text: `${b.w}x${b.h}`, pct: null, count: 0, color: null, icon: null }
+  // o tamanho já está no desenho do grid; antes de pegar, a categoria lida é o que diz mais
+  if (b.picks === 0) return { text: b.label ?? '', pct: null, count: 0, color: null, icon: null, hint: true }
   const top = b.candidates[0]
-  if (!top) return { text: '?', pct: null, count: 0, color: null, icon: null }
+  if (!top) return { text: '?', pct: null, count: 0, color: null, icon: null, hint: false }
   const certain = b.candidates.length === 1 || top.pct >= FULL_PCT
   return {
     text: top.name,
@@ -26,5 +28,6 @@ export function boxDisplay(b: BoxView): BoxDisplay {
     count: b.candidates.length,
     color: RARITY_COLORS[top.rarity] ?? UNKNOWN_RARITY,
     icon: certain ? top.icon : null,
+    hint: false,
   }
 }

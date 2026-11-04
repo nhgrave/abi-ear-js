@@ -18,7 +18,8 @@ const HEALTH_INTERVAL_MS = 500
 const PROFILE_KEY = 'abi-ear.profile'
 
 type Ref = { soundId: number; name: string; samples: Float32Array }
-export type LastPickup = { sound: string; score: number; outcome: PickupOutcome['kind']; reason: string | null }
+/** `uid`: a caixa que recebeu a pegada (a interface a seleciona), null se nenhuma. */
+export type LastPickup = { sound: string; score: number; outcome: PickupOutcome['kind']; reason: string | null; uid: number | null }
 
 export type RuntimeState = {
   loading: boolean
@@ -150,7 +151,13 @@ export function createRuntime() {
     const sound = soundName(out.event.soundId)
     const box = out.kind === 'assigned' ? (controller?.session.boxByUid(out.uid) ?? null) : null
     events.emit(pickupEvent(out, sound, box, performance.timeOrigin))
-    state.lastPickup = { sound, score: out.event.score, outcome: out.kind, reason: out.kind === 'unassigned' ? out.reason : null }
+    state.lastPickup = {
+      sound,
+      score: out.event.score,
+      outcome: out.kind,
+      reason: out.kind === 'unassigned' ? out.reason : null,
+      uid: out.kind === 'assigned' ? out.uid : null,
+    }
     if (out.kind === 'unassigned' && out.reason === 'no-cursor') lastNoCursorMs = performance.now()
     refresh()
   }
