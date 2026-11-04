@@ -16,7 +16,7 @@ export type FrameResult = {
   t: number
   cursor: CursorSample | null
   scan: GridScan | null | undefined // undefined: sem varredura neste quadro
-  mean: number // média de cinza (quadro preto)
+  mean: number // média de cinza da metade direita (quadro preto)
   labels: LabelReading[] // vazio sem varredura ou sem leitor
   labelMs?: number // tempo da leitura dos rótulos neste quadro (medido no replay)
   /** Aba ativa do vendedor acima do grid achado; undefined sem varredura, sem grid ou sem o quadro em cores. */
@@ -54,6 +54,7 @@ export class FramePipeline {
       }
     }
     const cursor = this.cursor.find(gray, t, this.lastGrid ?? hint)
-    return { t, cursor, scan: found, mean: meanGray(gray), labels, ...(labelMs !== undefined && { labelMs }), ...(tab !== undefined && { tab }) }
+    // média só da metade direita, a que o worker lê (e onde fica o vendedor)
+    return { t, cursor, scan: found, mean: meanGray(gray, Math.floor(gray.w / 2)), labels, ...(labelMs !== undefined && { labelMs }), ...(tab !== undefined && { tab }) }
   }
 }

@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 // Visão fora da thread da página: cada quadro vira cursor e, de tempos em tempos, grid do vendedor.
 import { FramePipeline } from '../engine/pipeline'
-import { rgbaToGray } from '../engine/vision/image'
+import { rgbaToGrayInto, type Gray } from '../engine/vision/image'
 import type { GridGeometry } from '../engine/vision/types'
 import type { VisionIn, VisionOut } from './protocol'
 
@@ -9,17 +9,22 @@ let pipeline = new FramePipeline()
 let canvas: OffscreenCanvas | null = null
 let ctx: OffscreenCanvasRenderingContext2D | null = null
 let hint: GridGeometry | null = null
+let gray: Gray | null = null // reaproveitada a cada quadro; a metade esquerda fica zerada
 const post = (m: VisionOut) => (self as unknown as Worker).postMessage(m)
 
+/** Só a metade direita da tela é lida: o vendedor, o cursor sobre ele e as abas ficam nela (scanVendor). Metade dos
+ * bytes copiados da GPU e convertidos a cada quadro. */
 function analyse(source: CanvasImageSource, w: number, h: number, t: number): void {
   if (!canvas || canvas.width !== w || canvas.height !== h) {
     canvas = new OffscreenCanvas(w, h)
     ctx = canvas.getContext('2d', { willReadFrequently: true })
+    gray = { w, h, data: new Uint8Array(w * h) }
   }
   ctx!.drawImage(source, 0, 0)
-  const rgba = ctx!.getImageData(0, 0, w, h).data
-  const gray = rgbaToGray(rgba, w, h)
-  post({ type: 'result', result: pipeline.process(gray, t, hint, { w, h, data: rgba }), size: [w, h] })
+  const x0 = Math.floor(w / 2)
+  const rgba = ctx!.getImageData(x0, 0, w - x0, h).data
+  rgbaToGrayInto(rgba, w - x0, h, gray!, x0)
+  post({ type: 'result', result: pipeline.process(gray!, t, hint, { w: w - x0, h, data: rgba, x0 }), size: [w, h] })
 }
 
 async function readStream(readable: ReadableStream<VideoFrame>, originMs: number, intervalMs: number): Promise<void> {

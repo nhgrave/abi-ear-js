@@ -62,3 +62,15 @@ describe('vendorTab', () => {
     expect(vendorTab(image((x, y) => (y >= 119 && y < 147 && x >= g.x0 + 35 && x < mid ? TAB : null)), g)).toBe('purchase')
   })
 })
+
+describe('right half only', () => {
+  it('reads the same tab from a crop that starts at x0', () => {
+    // o worker lê só a metade direita da tela: o recorte diz onde começa
+    const full = image(bar('left'))
+    const x0 = W / 2
+    const w = W - x0
+    const data = new Uint8ClampedArray(w * H * 4)
+    for (let y = 0; y < H; y++) data.set(full.data.subarray((y * W + x0) * 4, (y * W + W) * 4), y * w * 4)
+    expect(vendorTab({ w, h: H, data, x0 }, G)).toBe('purchase')
+  })
+})
