@@ -5,7 +5,8 @@
  * Opcional: ABI_REPLAY_STRICT=0 só imprime a tabela, sem exigir o critério (gravações de pega e devolve);
  * ABI_REPLAY_OUT=<arquivo> grava a tabela (o vitest esconde o console de testes que passam);
  * ABI_LABEL_MODELS=<arquivo> lê os rótulos com esses modelos e conta a categoria de cada pegada do log que tem uma;
- * ABI_REPLAY_FRAME_MS=<ms> intervalo mínimo entre quadros analisados (padrão 100, como a página ao vivo; 0 usa todos).
+ * ABI_REPLAY_FRAME_MS=<ms> intervalo mínimo entre quadros analisados (padrão 100, como a página ao vivo; 0 usa todos);
+ * ABI_REPLAY_WINDOW=<de>,<até> janela da atribuição em ms antes do som (padrão a de attribution.ts), para comparar.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -13,6 +14,7 @@ import { decode } from 'jpeg-js'
 import { describe, expect, it } from 'vitest'
 import { Listener, type ListenEvent } from './audio/listener'
 import { SoundMatcher } from './audio/matcher'
+import { WINDOW_MS } from './attribution'
 import { Controller, type PickupOutcome } from './controller'
 import { Dataset } from './data/dataset'
 import { FramePipeline } from './pipeline'
@@ -26,6 +28,8 @@ const LOG = process.env.ABI_APP_LOG
 const MODELS = process.env.ABI_LABEL_MODELS
 const STRICT = process.env.ABI_REPLAY_STRICT !== '0'
 const FRAME_MS = Number(process.env.ABI_REPLAY_FRAME_MS ?? 100) // a página ao vivo analisa um quadro a cada 100 ms
+// janela da atribuição em teste (ABI_REPLAY_WINDOW=150,400): só para medir alternativas
+if (process.env.ABI_REPLAY_WINDOW) WINDOW_MS.splice(0, 2, ...(process.env.ABI_REPLAY_WINDOW.split(',').map(Number) as [number, number]))
 const APP_CLOCK_MS = 85 // o som na gravação chega cerca de 85 ms depois do horário que o app registra
 const NEAR_MS = 500 // pegada ouvida a até isto da pegada do app (como tools/spike_eval.py)
 const BLOCK = 4096

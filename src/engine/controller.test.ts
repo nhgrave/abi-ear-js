@@ -169,6 +169,23 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
     }
     beforeEach(() => c.setProfile('auto'))
 
+    it('labels read in the frame tell which same-size box was bought', () => {
+      // comprada a 2ª de cinco 1x1: as seguintes andam uma casa; a pegada fica com a caixa certa
+      const ones = [0, 1, 2, 3, 4].map((col) => rect(col, 0, 1, 1))
+      const before = grid([...ones, rect(5, 0, 1, 2), rect(6, 0, 1, 2), rect(7, 0, 1, 2), rect(8, 0, 1, 2), rect(0, 1, 1, 2), rect(1, 1, 2, 1), rect(3, 1, 2, 1)])
+      const after = grid([...ones.slice(0, 4), rect(4, 0, 1, 2), rect(5, 0, 1, 2), rect(6, 0, 1, 2), rect(7, 0, 1, 2), rect(8, 0, 1, 2), rect(0, 1, 2, 1), rect(2, 1, 2, 1)])
+      const cats = ['Uncommon Mystery Cargo', 'Collectibles', 'Instruments', 'Instruments', 'Mystery Cargo']
+      const readsBefore = cats.map((l, col) => read(ones[col], l))
+      c.onFrame(frame(1_000, before, null, readsBefore))
+      c.onFrame(frame(1_350, before, null, readsBefore))
+      for (const dt of [380, 280, 180]) c.onFrame(frame(3_000 - dt, dt === 380 ? before : undefined, [4 * 64 + 10, 10]))
+      expect(c.onPickup({ kind: 'pickup', t: 3_000, soundId: 31, score: 0.95, hits: [{ soundId: 31, score: 0.95 }] }).kind).toBe('assigned')
+      const readsAfter = cats.filter((l) => l !== 'Collectibles').map((l, col) => read(ones[col], l))
+      c.onFrame(frame(5_000, after, null, readsAfter))
+      c.onFrame(frame(5_350, after, null, readsAfter))
+      expect(c.session.boxes.get('3,0')!.picks).toBe(1) // a Mystery Cargo pega, que andou de (4, 0) para (3, 0)
+    })
+
     it('label_needs_two_equal_readings', () => {
       c.onFrame(frame(1_000, SCAN, null, [read(A, 'Energy Items')]))
       expect(c.session.boxes.get('0,0')!.label).toBeNull()
