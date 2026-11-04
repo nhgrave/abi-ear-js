@@ -50,7 +50,10 @@ onMounted(async () => {
   if (preview !== null && rt.dataset()) {
     const { previewView } = await import('./dev/preview')
     s.view = previewView(rt.dataset()!)
-    if (preview !== 'help') selected.value = s.view.boxes.find((b) => b.picks > 0 && b.candidates.length > 1)?.uid ?? null
+    const ok = (reason: string) => ({ level: 'green' as const, reason })
+    s.health = { audio: ok('audio.ok'), screen: ok('screen.ok'), vendor: ok('vendor.ok'), cursor: ok('cursor.ok') }
+    const picked = s.view.boxes.find((b) => b.picks > 0 && b.candidates.length > 1)
+    if (picked) s.lastPickup = { sound: 'Item_Misc_ElectronicDevice_Up', score: 0.93, outcome: 'assigned', reason: null, uid: preview === 'help' ? null : picked.uid }
   }
 })
 </script>
