@@ -100,6 +100,7 @@ self.onmessage = (e: MessageEvent<FramesIn>) => {
     stopped = false
     const rec = new FrameRecorder<VideoFrame>({
       intervalMs: m.intervalMs,
+      maxInFlight: m.maxInFlight,
       encode,
       write: (name, data) => writeFrame(m.dir, name, data),
     })

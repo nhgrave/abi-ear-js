@@ -1,14 +1,22 @@
 /** Grava a sessão compartilhada numa subpasta: quadros (worker próprio, num clone da trilha de vídeo), áudio (contexto
- * próprio com o worklet da página) e session.json. Independente da análise ao vivo, para não pesar nela. */
+ * próprio com o worklet da página), session.json e events.jsonl (o que a análise ao vivo fez e os erros do console).
+ * Independente da análise ao vivo, para não pesar nela. */
 import workletUrl from '../../live/audio-worklet.ts?worker&url'
 import { audioTimeMs, outputTimestamp } from '../../live/capture'
 import { hasFolderPicker } from './folder'
+import type { LiveEvent } from '../../live/live-events'
+import { EventLog } from './event-log'
 import { finishSession, recordingName, startSession, type SessionFile } from './format'
 import { summarize, type RecordingSummary } from './history'
 import type { FramesIn, FramesOut } from './protocol'
+import { isChrome, supportProblem } from './support'
 import { SAMPLE_RATE, WavWriter } from './wav'
 
-const FRAME_INTERVAL_MS = 100
+/** Quadros por segundo que a seção oferece. A análise ao vivo usa 10; gravar mais deixa o replay testar outras taxas. */
+export const FRAME_RATES = [10, 15, 30] as const
+export type FrameRate = (typeof FRAME_RATES)[number]
+// quadros sendo codificados ou escritos ao mesmo tempo: um JPEG de 1080p leva uns 200 ms entre codificar e salvar
+const MAX_FRAMES_IN_FLIGHT = 8
 const WORKER_STOP_TIMEOUT_MS = 5000
 
 type Processor = new (o: { track: MediaStreamTrack }) => { readable: ReadableStream<VideoFrame> }
@@ -25,9 +33,13 @@ export type ActiveRecording = {
 
 /** null se dá para gravar neste navegador, senão o que falta. */
 export function recordingSupport(): string | null {
-  if (!hasFolderPicker()) return 'Este navegador não tem File System Access.'
-  if (!processor()) return 'Este navegador não tem MediaStreamTrackProcessor.'
-  return null
+  const brands = (navigator as Navigator & { userAgentData?: { brands: { brand: string }[] } }).userAgentData?.brands
+  return supportProblem({
+    chrome: isChrome(brands),
+    secure: window.isSecureContext,
+    picker: hasFolderPicker(),
+    processor: !!processor(),
+  })
 }
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err))
@@ -47,7 +59,51 @@ async function writeJson(dir: FileSystemDirectoryHandle, name: string, value: un
   await w.close()
 }
 
-export async function startRecording(stream: MediaStream, root: FileSystemDirectoryHandle): Promise<ActiveRecording> {
+export type RecordingOptions = {
+  fps: FrameRate
+  /** Assina os eventos da análise ao vivo (o `onEvent` do runtime); devolve o cancelamento. */
+  subscribe?: (fn: (e: LiveEvent) => void) => () => void
+}
+
+const now = () => performance.timeOrigin + performance.now()
+
+function consoleText(args: unknown[]): string {
+  return args
+    .map((a) => {
+      if (a instanceof Error) return a.stack ?? `${a.name}: ${a.message}`
+      if (typeof a === 'string') return a
+      try {
+        return JSON.stringify(a)
+      } catch {
+        return String(a)
+      }
+    })
+    .join(' ')
+}
+
+/** Copia avisos e erros do console e os erros soltos da página para `log` até o cancelamento devolvido. */
+function captureConsole(log: (level: string, text: string) => void): () => void {
+  const orig = { warn: console.warn, error: console.error }
+  console.warn = (...a: unknown[]) => (log('warn', consoleText(a)), orig.warn.apply(console, a))
+  console.error = (...a: unknown[]) => (log('error', consoleText(a)), orig.error.apply(console, a))
+  const onError = (e: ErrorEvent) => log('error', e.error instanceof Error ? consoleText([e.error]) : e.message)
+  const onRejection = (e: PromiseRejectionEvent) => log('error', `promessa rejeitada: ${consoleText([e.reason])}`)
+  window.addEventListener('error', onError)
+  window.addEventListener('unhandledrejection', onRejection)
+  return () => {
+    console.warn = orig.warn
+    console.error = orig.error
+    window.removeEventListener('error', onError)
+    window.removeEventListener('unhandledrejection', onRejection)
+  }
+}
+
+export async function startRecording(
+  stream: MediaStream,
+  root: FileSystemDirectoryHandle,
+  opts: RecordingOptions,
+): Promise<ActiveRecording> {
+  const intervalMs = Math.round(1000 / opts.fps)
   const Processor = processor()
   const video = stream.getVideoTracks()[0]
   const audioTrack = stream.getAudioTracks()[0] ?? null
@@ -66,9 +122,12 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
     video: video.getSettings(),
     audio: audioTrack?.getSettings() ?? {},
     appVersion: __APP_VERSION__,
-    frameIntervalMs: FRAME_INTERVAL_MS,
+    frameIntervalMs: intervalMs,
   })
   let wav: WavWriter | null = null
+  let events: EventLog | null = null
+  let unsubscribe: (() => void) | null = null
+  let restoreConsole: (() => void) | null = null
 
   let ctx: AudioContext | null = null
   let node: AudioWorkletNode | null = null
@@ -96,6 +155,10 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
   }
 
   const release = () => {
+    unsubscribe?.()
+    unsubscribe = null
+    restoreConsole?.()
+    restoreConsole = null
     window.removeEventListener('beforeunload', onBeforeUnload)
     video.removeEventListener('ended', onEnded)
     if (node) node.port.onmessage = null
@@ -121,6 +184,12 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
       } catch (err) {
         failure ??= `áudio: ${message(err)}`
       }
+      events!.append({ type: 'recording', t: now(), event: 'stop', error: failure })
+      try {
+        await events!.finish()
+      } catch (err) {
+        failure ??= `events.jsonl: ${message(err)}`
+      }
       session = finishSession(session, {
         endedAt: new Date(),
         frames: fr.frames,
@@ -145,6 +214,10 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
     const framesDir = await dir.getDirectoryHandle('frames', { create: true })
     await writeJson(dir, 'session.json', session) // já no começo: uma gravação interrompida aparece no histórico
     const writer = (wav = new WavWriter(await (await dir.getFileHandle('audio.wav', { create: true })).createWritable()))
+    const log = (events = new EventLog(await (await dir.getFileHandle('events.jsonl', { create: true })).createWritable()))
+    log.append({ type: 'recording', t: startedAtMs, event: 'start', name, fps: opts.fps, appVersion: __APP_VERSION__ })
+    restoreConsole = captureConsole((level, text) => log.append({ type: 'console', t: now(), level, text }))
+    unsubscribe = opts.subscribe?.((e) => log.append(e)) ?? null
 
     // áudio: contexto próprio com o worklet da página; o tempo da primeira amostra vem do getOutputTimestamp dele
     if (audioTrack) {
@@ -184,12 +257,16 @@ export async function startRecording(stream: MediaStream, root: FileSystemDirect
       resolveFrames({ frames, skipped, error: e.message || 'erro no worker' })
       void stop()
     }
-    w.postMessage({ type: 'start', readable, dir: framesDir, intervalMs: FRAME_INTERVAL_MS } satisfies FramesIn, [readable])
+    w.postMessage(
+      { type: 'start', readable, dir: framesDir, intervalMs, maxInFlight: MAX_FRAMES_IN_FLIGHT } satisfies FramesIn,
+      [readable],
+    )
   } catch (err) {
     // começo que falhou: libera tudo e apaga a pasta pela metade, para não virar uma "incompleta" no histórico
     stopping = true
     release()
     await wav?.finish().catch(() => {})
+    await events?.finish().catch(() => {})
     await root.removeEntry(name, { recursive: true }).catch(() => {})
     throw err
   }

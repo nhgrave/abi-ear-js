@@ -70,7 +70,7 @@ onMounted(() => {
       <BoxDetails v-if="selectedBox" :box="selectedBox" :locale="locale" />
     </main>
 
-    <component :is="DevRecorder" v-if="DevRecorder" :sharing="s.sharing" :get-stream="rt.stream" />
+    <component :is="DevRecorder" v-if="DevRecorder" :sharing="s.sharing" :get-stream="rt.stream" :subscribe="rt.onEvent" />
     <AppFooter :last-pickup="s.lastPickup" :version="s.dataVersion" :synced-at="s.syncedAt" :resolution="s.resolution" :locale="locale" />
   </div>
 </template>

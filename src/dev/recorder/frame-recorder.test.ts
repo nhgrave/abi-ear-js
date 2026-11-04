@@ -8,6 +8,7 @@ describe('FrameRecorder', () => {
     const writes: string[] = []
     const recorder = new FrameRecorder<string>({
       intervalMs: 100,
+      maxInFlight: 1,
       encode: async (f) => new Blob([f]),
       write: async (name) => {
         writes.push(name)
@@ -40,6 +41,7 @@ describe('FrameRecorder', () => {
     let savedBlob: Blob | undefined
     const recorder = new FrameRecorder<string>({
       intervalMs: 100,
+      maxInFlight: 1,
       encode: async (f) => new Blob([f]),
       write: async (name, data) => {
         savedName = name
@@ -70,6 +72,7 @@ describe('FrameRecorder', () => {
 
     const recorder = new FrameRecorder<string>({
       intervalMs: 100,
+      maxInFlight: 1,
       encode: async (f) => new Blob([f]),
       write,
     })
@@ -97,6 +100,7 @@ describe('FrameRecorder', () => {
 
     const recorder = new FrameRecorder<string>({
       intervalMs: 100,
+      maxInFlight: 1,
       encode: async (f) => new Blob([f]),
       write,
     })
@@ -112,5 +116,55 @@ describe('FrameRecorder', () => {
     const result = await recorder.drain()
     expect(result.error).toContain('disk full')
     expect(result.frames).toBe(0)
+  })
+
+  it('keeps up to maxInFlight frames encoding or writing at once', async () => {
+    const release: (() => void)[] = []
+    const writes: string[] = []
+    const recorder = new FrameRecorder<string>({
+      intervalMs: 100,
+      maxInFlight: 3,
+      encode: async (f) => new Blob([f]),
+      write: (name) =>
+        new Promise<void>((r) => {
+          writes.push(name)
+          release.push(r)
+        }),
+    })
+
+    expect(recorder.offer('f1', 0)).toBe('taken')
+    expect(recorder.offer('f2', 100)).toBe('taken')
+    expect(recorder.offer('f3', 200)).toBe('taken')
+    expect(recorder.offer('f4', 300)).toBe('skipped') // três em andamento
+    await tick()
+    release.shift()!() // o primeiro termina: abre uma vaga
+    await tick()
+    expect(recorder.offer('f5', 400)).toBe('taken')
+
+    release.forEach((r) => r())
+    await tick()
+    release.forEach((r) => r()) // o do f5, que entrou depois
+    expect(await recorder.drain()).toEqual({ frames: 4, skipped: 1, error: null })
+    expect(writes).toEqual(['0.jpg', '100.jpg', '200.jpg', '400.jpg'])
+  })
+
+  it('drain waits for every frame in flight', async () => {
+    const release: (() => void)[] = []
+    const recorder = new FrameRecorder<string>({
+      intervalMs: 100,
+      maxInFlight: 3,
+      encode: async (f) => new Blob([f]),
+      write: () => new Promise<void>((r) => release.push(r)),
+    })
+    recorder.offer('f1', 0)
+    recorder.offer('f2', 100)
+    await tick()
+    let drained = false
+    const d = recorder.drain().then((r) => ((drained = true), r))
+    release[1]() // o segundo termina antes do primeiro
+    await tick()
+    expect(drained).toBe(false)
+    release[0]()
+    expect(await d).toEqual({ frames: 2, skipped: 0, error: null })
   })
 })

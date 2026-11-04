@@ -3,9 +3,39 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { folderAccess, loadFolder, pickFolder, saveFolder } from './recorder/folder'
 import { listRecordings, type RecordingSummary } from './recorder/history'
-import { recordingSupport, startRecording, type ActiveRecording, type RecordingStats } from './recorder/recorder'
+import type { LiveEvent } from '../live/live-events'
+import {
+  FRAME_RATES,
+  recordingSupport,
+  startRecording,
+  type ActiveRecording,
+  type FrameRate,
+  type RecordingStats,
+} from './recorder/recorder'
 
-const props = defineProps<{ sharing: boolean; getStream: () => MediaStream | null }>()
+const props = defineProps<{
+  sharing: boolean
+  getStream: () => MediaStream | null
+  subscribe: (fn: (e: LiveEvent) => void) => () => void
+}>()
+
+const FPS_KEY = 'abi-ear-dev.fps'
+function readFps(): FrameRate {
+  try {
+    const v = Number(localStorage.getItem(FPS_KEY))
+    return (FRAME_RATES as readonly number[]).includes(v) ? (v as FrameRate) : 30
+  } catch {
+    return 30
+  }
+}
+const fps = ref<FrameRate>(readFps())
+watch(fps, (v) => {
+  try {
+    localStorage.setItem(FPS_KEY, String(v))
+  } catch {
+    /* lembrar é conveniência */
+  }
+})
 
 const support = recordingSupport()
 const folder = ref<FileSystemDirectoryHandle | null>(null)
@@ -38,6 +68,8 @@ const STATUS: Record<RecordingSummary['status'] | 'recording', string> = {
 /** A gravação em andamento ainda não tem fim no session.json: não mostrar como incompleta. */
 const statusOf = (r: RecordingSummary) => (active.value && stats.value?.name === r.name ? 'recording' : r.status)
 const when = (iso: string | null) => (iso && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleString('pt-BR') : '—')
+/** Quadros salvos por segundo de gravação. */
+const rate = (r: RecordingSummary) => (r.frames && r.durationS ? `${(r.frames / r.durationS).toFixed(1)}/s` : '—')
 const duration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
 
 async function refresh(): Promise<void> {
@@ -75,7 +107,7 @@ async function record(): Promise<void> {
   busy.value = true
   notice.value = error.value = null
   try {
-    const rec = await startRecording(stream, folder.value)
+    const rec = await startRecording(stream, folder.value, { fps: fps.value, subscribe: props.subscribe })
     active.value = rec
     stats.value = rec.stats()
     timer = window.setInterval(() => (stats.value = rec.stats()), 500)
@@ -161,11 +193,17 @@ onBeforeUnmount(() => {
     <div class="row">
       <span class="muted">Pasta:</span>
       <strong>{{ folder?.name ?? 'nenhuma' }}</strong>
-      <button :disabled="!!active" @click="choose">Escolher pasta</button>
-      <button v-if="folder && !allowed" @click="allow">Liberar pasta</button>
+      <button :disabled="!!active || !!support" @click="choose">Escolher pasta</button>
+      <button v-if="folder && !allowed" :disabled="!!support" @click="allow">Liberar pasta</button>
     </div>
 
     <div class="row">
+      <label class="muted">
+        Quadros por segundo:
+        <select v-model.number="fps" :disabled="!!active">
+          <option v-for="r in FRAME_RATES" :key="r" :value="r">{{ r }}</option>
+        </select>
+      </label>
       <button v-if="!active" class="primary" :disabled="!canRecord" @click="record">Gravar</button>
       <button v-else class="stop" :disabled="busy" @click="stop">Parar</button>
       <span v-if="!active && !support && !sharing" class="muted">Inicie o compartilhamento para gravar.</span>
@@ -184,7 +222,7 @@ onBeforeUnmount(() => {
       <p v-if="history.length === 0" class="muted">Nenhuma gravação nesta pasta.</p>
       <table v-else>
         <thead>
-          <tr><th>Gravação</th><th>Início</th><th>Duração</th><th>Quadros</th><th>Áudio</th><th>Resolução</th><th>Status</th><th></th></tr>
+          <tr><th>Gravação</th><th>Início</th><th>Duração</th><th>Quadros</th><th>Por segundo</th><th>Áudio</th><th>Resolução</th><th>Status</th><th></th></tr>
         </thead>
         <tbody>
           <tr v-for="r in history" :key="r.name">
@@ -192,6 +230,7 @@ onBeforeUnmount(() => {
             <td>{{ when(r.startedAt) }}</td>
             <td>{{ dash(r.durationS, duration) }}</td>
             <td>{{ dash(r.frames, String) }}</td>
+            <td>{{ rate(r) }}</td>
             <td>{{ dash(r.audioS, (s) => `${s.toFixed(1)} s`) }}</td>
             <td>{{ r.resolution ? `${r.resolution[0]}×${r.resolution[1]}` : '—' }}</td>
             <td :class="statusOf(r)" :title="r.error ?? undefined">{{ STATUS[statusOf(r)] }}</td>

@@ -1,12 +1,14 @@
-// Ritmo e gravação de quadros: garante intervalo mínimo e pula quadros se a escrita atrasar.
+// Ritmo e gravação de quadros: garante intervalo mínimo e pula quadros quando já há `maxInFlight` sendo codificados
+// ou escritos (um JPEG de 1080p leva uns 200 ms entre codificar e salvar: um de cada vez não passa de 5 por segundo).
 
 export class FrameRecorder<F> {
   private readonly intervalMs: number
+  private readonly maxInFlight: number
   private readonly encode: (frame: F) => Promise<Blob>
   private readonly write: (name: string, data: Blob) => Promise<void>
 
   private lastEpochMs: number | null = null
-  private pendingWrite: Promise<void> | null = null
+  private readonly inFlight = new Set<Promise<void>>()
   private stopped = false
 
   frames = 0
@@ -15,10 +17,12 @@ export class FrameRecorder<F> {
 
   constructor(d: {
     intervalMs: number
+    maxInFlight: number
     encode(frame: F): Promise<Blob>
     write(name: string, data: Blob): Promise<void>
   }) {
     this.intervalMs = d.intervalMs
+    this.maxInFlight = d.maxInFlight
     this.encode = d.encode
     this.write = d.write
   }
@@ -32,7 +36,7 @@ export class FrameRecorder<F> {
       return 'early'
     }
 
-    if (this.pendingWrite !== null) {
+    if (this.inFlight.size >= this.maxInFlight) {
       this.skipped++
       this.lastEpochMs = epochMs
       return 'skipped'
@@ -43,7 +47,7 @@ export class FrameRecorder<F> {
 
     try {
       const blobPromise = this.encode(frame)
-      this.pendingWrite = blobPromise
+      const job: Promise<void> = blobPromise
         .then((blob) => this.write(name, blob))
         .then(() => {
           this.frames++
@@ -54,8 +58,9 @@ export class FrameRecorder<F> {
           }
         })
         .finally(() => {
-          this.pendingWrite = null
+          this.inFlight.delete(job)
         })
+      this.inFlight.add(job)
       return 'taken'
     } catch (err) {
       this.error = err instanceof Error ? err.message : String(err)
@@ -65,9 +70,7 @@ export class FrameRecorder<F> {
 
   async drain(): Promise<{ frames: number; skipped: number; error: string | null }> {
     this.stopped = true
-    if (this.pendingWrite !== null) {
-      await this.pendingWrite
-    }
+    await Promise.all([...this.inFlight])
     return {
       frames: this.frames,
       skipped: this.skipped,

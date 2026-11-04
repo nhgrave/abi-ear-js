@@ -1,11 +1,12 @@
-/** Aceitação do motor: repete uma gravação real do protótipo e compara com o log do app desktop.
+/** Aceitação do motor: repete uma gravação real e compara com o log do app desktop (se ABI_APP_LOG) e com o que a
+ * página fez ao vivo durante a gravação (o events.jsonl da pasta, gravado desde a v0.2.1).
  *
- * ABI_REPLAY=<pasta da gravação> ABI_APP_LOG=<abi-ear.log> npx vitest run src/engine/replay.test.ts
+ * ABI_REPLAY=<pasta da gravação> [ABI_APP_LOG=<abi-ear.log>] npx vitest run src/engine/replay.test.ts
  * Opcional: ABI_REPLAY_STRICT=0 só imprime a tabela, sem exigir o critério (gravações de pega e devolve);
  * ABI_REPLAY_OUT=<arquivo> grava a tabela (o vitest esconde o console de testes que passam);
  * ABI_LABEL_MODELS=<arquivo> lê os rótulos com esses modelos e conta a categoria de cada pegada do log que tem uma.
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { decode } from 'jpeg-js'
 import { describe, expect, it } from 'vitest'
@@ -43,8 +44,28 @@ function readWavF32(path: string): Float32Array {
   throw new Error('WAV sem bloco data')
 }
 
-describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
-  it('agrees with the desktop app picks', () => {
+type LivePickup = {
+  type: 'pickup'
+  t: number
+  sound: string
+  outcome: 'assigned' | 'unassigned'
+  reason: string | null
+  box: { col: number; row: number; w: number; h: number; label: string | null } | null
+}
+
+/** As pegadas que a página ouviu ao vivo, do events.jsonl da gravação (vazio se a gravação não tem). */
+function readLivePickups(dir: string): LivePickup[] | null {
+  const path = join(dir, 'events.jsonl')
+  if (!existsSync(path)) return null
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as { type: string })
+    .filter((e): e is LivePickup => e.type === 'pickup')
+}
+
+describe.skipIf(!DIR)('replay of a real recording', () => {
+  it('agrees with the desktop app picks and the live page', () => {
     const session = readJson<{ audioStartEpochMs: number }>(join(DIR!, 'session.json'))
     const audio = readWavF32(join(DIR!, 'audio.wav'))
     const frames = readdirSync(join(DIR!, 'frames'))
@@ -60,7 +81,7 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
     const controller = new Controller(ds)
     controller.setProfile('auto') // o padrão da página
     const pipeline = new FramePipeline(MODELS ? readJson<LabelModels>(MODELS) : null)
-    const picks = parseAppPicks(readFileSync(LOG!, 'latin1')).filter((p) => p.t >= frames[0].t && p.t <= frames[frames.length - 1].t)
+    const picks = (LOG ? parseAppPicks(readFileSync(LOG, 'latin1')) : []).filter((p) => p.t >= frames[0].t && p.t <= frames[frames.length - 1].t)
     const counts: Record<string, number> = {}
     const wrong: string[] = []
     const matched = new Set<AppPick>()
@@ -83,9 +104,44 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
       }
     }
 
+    // o que a página fez ao vivo: mesma base de tempo da gravação, sem a diferença de relógio do app
+    const live = readLivePickups(DIR!)
+    const liveMatched = new Set<LivePickup>()
+    const liveCounts: Record<string, number> = {}
+    const liveDiffs: string[] = []
+    const compareLive = (out: PickupOutcome) => {
+      if (!live) return
+      const tally = (k: string) => (liveCounts[k] = (liveCounts[k] ?? 0) + 1)
+      const l = live
+        .filter((q) => !liveMatched.has(q) && Math.abs(q.t - out.event.t) <= NEAR_MS)
+        .sort((a, b) => Math.abs(a.t - out.event.t) - Math.abs(b.t - out.event.t))[0]
+      if (!l) return tally('só no replay')
+      liveMatched.add(l)
+      const ours = out.kind === 'assigned' ? controller.session.boxByUid(out.uid) : null
+      const where = (b: LivePickup['box']) => (b ? `(${b.col}, ${b.row}) ${b.w}x${b.h} ${b.label ?? 'sem categoria'}` : '-')
+      const same =
+        out.kind === l.outcome &&
+        (out.kind === 'assigned'
+          ? !!ours && !!l.box && ours.col === l.box.col && ours.row === l.box.row && ours.w === l.box.w && ours.h === l.box.h
+          : out.reason === l.reason)
+      if (same) {
+        tally('igual')
+        if (ours && l.box && ours.label !== l.box.label) {
+          tally('categoria diferente')
+          liveDiffs.push(`${new Date(l.t).toISOString()} categoria: ao vivo ${l.box.label}, replay ${ours.label}`)
+        }
+        return
+      }
+      tally('diferente')
+      const replay = out.kind === 'assigned' ? where(ours && { col: ours.col, row: ours.row, w: ours.w, h: ours.h, label: ours.label }) : `? (${out.reason})`
+      const atLive = l.outcome === 'assigned' ? where(l.box) : `? (${l.reason})`
+      liveDiffs.push(`${new Date(l.t).toISOString()} ao vivo ${atLive}; replay ${replay}`)
+    }
+
     /** Avalia a pegada na hora, com a sessão como estava: a caixa sob o cursor do app é o gabarito. */
     const judge = (out: PickupOutcome) => {
       heardTotal++
+      compareLive(out)
       const p = picks
         .filter((q) => !matched.has(q) && Math.abs(q.t + APP_CLOCK_MS - out.event.t) <= NEAR_MS)
         .sort((a, b) => Math.abs(a.t + APP_CLOCK_MS - out.event.t) - Math.abs(b.t + APP_CLOCK_MS - out.event.t))[0]
@@ -108,7 +164,7 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
       while (fi < frames.length && frames[fi].t <= tStart) {
         const img = decode(readFileSync(frames[fi].path), { useTArray: true, formatAsRGBA: true })
         const gray = rgbaToGray(img.data as unknown as Uint8ClampedArray, img.width, img.height)
-        const r = pipeline.process(gray, frames[fi].t, controller.hint())
+        const r = pipeline.process(gray, frames[fi].t, controller.hint(), { w: img.width, h: img.height, data: img.data })
         if (r.labelMs !== undefined) labelMs.push(r.labelMs)
         controller.onFrame(r)
         judgeLabels(frames[fi].t)
@@ -126,10 +182,17 @@ describe.skipIf(!DIR || !LOG)('replay of a real recording', () => {
       ? `categorias (${labeledPicks.length} pegadas do log com categoria): ${JSON.stringify(cats)}\n${wrongCats.join('\n')}\n` +
         `leitura por varredura: p95 ${ms(0.95)} ms, máximo ${ms(1)} ms (${labelMs.length} varreduras)\n`
       : ''
-    const summary = `${DIR}\n${picks.length} pegadas do app, ${heard} com som, ${heardTotal} pegadas ouvidas\n${JSON.stringify(counts)}\n${wrong.join('\n')}\n${labelSummary}`
+    if (live) liveCounts['só ao vivo'] = live.length - liveMatched.size
+    const liveSummary = live
+      ? `ao vivo (${live.length} pegadas no events.jsonl): ${JSON.stringify(liveCounts)}\n${liveDiffs.join('\n')}\n`
+      : 'ao vivo: a gravação não tem events.jsonl\n'
+    const appSummary = LOG
+      ? `${picks.length} pegadas do app, ${heard} com som, ${heardTotal} pegadas ouvidas\n${JSON.stringify(counts)}\n${wrong.join('\n')}\n`
+      : `sem log do app; ${heardTotal} pegadas ouvidas\n`
+    const summary = `${DIR}\n${appSummary}${liveSummary}${labelSummary}`
     console.log(summary)
     if (process.env.ABI_REPLAY_OUT) writeFileSync(process.env.ABI_REPLAY_OUT, summary)
-    if (STRICT) {
+    if (STRICT && LOG) {
       expect(counts['errada'] ?? 0).toBeLessThanOrEqual(1)
       expect(counts['concorda'] ?? 0).toBeGreaterThanOrEqual(0.95 * heard)
       if (MODELS) expect(cats['errada']).toBe(0)
