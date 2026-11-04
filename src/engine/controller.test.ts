@@ -212,11 +212,12 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
       }
       pick(5_000)
       const box = c.session.boxes.get('0,0')!
-      expect(box.ranking!.candidates.map((x) => x.item.name)).toContain('Titanium Alloy Plate')
+      const before = box.ranking!.candidates.map((x) => x.item.name)
+      expect(before).toContain('"Destiny" Gold Clay Tablet') // Collectibles, 3x2, o mesmo som
+      expect(before).not.toContain('Titanium Alloy Plate') // 2x3: não cabe deitada
       confirm(6_000, wide, 'Energy Items', scan)
       const names = box.ranking!.candidates.map((x) => x.item.name)
-      expect(names[0]).toBe('Car Battery')
-      expect(names).not.toContain('Titanium Alloy Plate')
+      expect(names).toEqual(['Car Battery'])
     })
 
     it('automatic_profile_follows_the_labels_and_reranks', () => {

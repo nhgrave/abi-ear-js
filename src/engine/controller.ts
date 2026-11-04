@@ -36,14 +36,12 @@ export class Controller {
   constructor(public ds: Dataset) {
     const seen = new Set<string>()
     this.sizes = []
-    for (const it of ds.items.values()) {
-      for (const [w, h] of [it.size, [it.size[1], it.size[0]] as [number, number]]) {
-        if (!seen.has(`${w}x${h}`)) seen.add(`${w}x${h}`) && this.sizes.push([w, h])
-      }
+    for (const [w, h] of [...ds.items.values()].map((it) => it.size)) {
+      if (!seen.has(`${w}x${h}`)) seen.add(`${w}x${h}`) && this.sizes.push([w, h])
     }
   }
 
-  /** Algum item cabe: inteira, com o tamanho exato (girado ou não); cortada na borda de cima ou de baixo, com a
+  /** Algum item cabe: inteira, com o tamanho exato (o vendedor não gira itens); cortada na borda de cima ou de baixo, com a
    * mesma largura e altura de pelo menos a parte visível. */
   private possible(b: { w: number; h: number; clipped: boolean }): boolean {
     return this.sizes.some(([w, h]) => w === b.w && (b.clipped ? h >= b.h : h === b.h))
