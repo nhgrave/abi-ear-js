@@ -17,8 +17,9 @@ function analyse(source: CanvasImageSource, w: number, h: number, t: number): vo
     ctx = canvas.getContext('2d', { willReadFrequently: true })
   }
   ctx!.drawImage(source, 0, 0)
-  const gray = rgbaToGray(ctx!.getImageData(0, 0, w, h).data, w, h)
-  post({ type: 'result', result: pipeline.process(gray, t, hint), size: [w, h] })
+  const rgba = ctx!.getImageData(0, 0, w, h).data
+  const gray = rgbaToGray(rgba, w, h)
+  post({ type: 'result', result: pipeline.process(gray, t, hint, { w, h, data: rgba }), size: [w, h] })
 }
 
 async function readStream(readable: ReadableStream<VideoFrame>, originMs: number, intervalMs: number): Promise<void> {

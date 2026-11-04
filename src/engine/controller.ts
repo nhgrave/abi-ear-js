@@ -82,6 +82,11 @@ export class Controller {
       this.history.add({ t: r.t, missing: true })
     }
     if (r.scan === undefined) return // sem varredura neste quadro
+    // só o vendedor tem a aba Purchase ativa acima do grid: armazém, saque, chão e a aba Sell não são o vendedor
+    if (r.scan !== null && r.tab !== undefined && r.tab !== 'purchase') {
+      this.vendorVisible = false // a sessão fica guardada
+      return
+    }
     const readings = r.labels
     const anyLabel = readings.some((x) => x.label !== null)
     if (r.scan === null || this.rejectedByText(r.scan, readings, anyLabel) || this.otherScreen(r.scan, readings, anyLabel, r.t)) {

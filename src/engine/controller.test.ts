@@ -43,6 +43,26 @@ describe.skipIf(!hasFixtures('merchant.json'))('controller', () => {
     expect(pickAt(99_000, [5 * 64 + 5, 5 * 64 + 5])).toMatchObject({ kind: 'unassigned', reason: 'no-box' })
   })
 
+  it('a grid without the Purchase tab is not the vendor and keeps the stored session', () => {
+    pickAt(1_000, ON_7_1)
+    for (const tab of ['sell', null] as const) {
+      // aba Sell (o estoque do jogador) ou tela sem a barra (armazém, saque), depois de o vendedor sumir
+      c.onFrame({ ...frame(20_000, grid([rect(0, 0, 1, 1), rect(3, 2, 2, 1)])), tab })
+      expect(c.vendorVisible).toBe(false)
+      expect(c.session.boxes.get('7,1')!.picks).toBe(1)
+    }
+    c.onFrame({ ...frame(21_000, SCAN), tab: 'purchase' })
+    expect(c.vendorVisible).toBe(true)
+    expect(c.session.boxes.get('7,1')!.picks).toBe(1)
+  })
+
+  it('a grid on a page without the Purchase tab never starts a session', () => {
+    c.onFrame({ ...frame(1_000, SCAN), tab: null })
+    expect(c.vendorVisible).toBe(false)
+    expect(c.session.boxes.size).toBe(0)
+    expect(c.hint()).toBeNull()
+  })
+
   it('vendor closed and reopened keeps results', () => {
     pickAt(1_000, ON_7_1)
     for (const t of [5_000, 40_000]) c.onFrame(frame(t, null)) // saiu do vendedor por meio minuto
