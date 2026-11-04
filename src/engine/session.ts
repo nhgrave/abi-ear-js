@@ -69,8 +69,9 @@ export class TrackedBox {
     return new Set(boxCells(this).map(([c, r]) => cellKey(c, r)))
   }
 
+  /** Algo que vale guardar se a caixa sumir: pegadas ou a categoria já lida (que leva duas leituras para voltar). */
   get hasData(): boolean {
-    return this.picks > 0
+    return this.picks > 0 || this.label !== null
   }
 
   addHits(hits: readonly SoundHit[]): void {
@@ -258,15 +259,21 @@ export class VendorSession {
     if (box !== undefined && box.hasData) this.removed.set(key, [nowMs, box])
   }
 
-  private restore(nw: TrackedBox, nowMs: number): void {
+  /** A caixa removida que `nw` (já em coordenadas de conteúdo) traz de volta: mesmo lugar, mesmo tamanho, há pouco. */
+  private restorable(nw: { key: string; w: number; h: number; clipped: boolean; label: string | null }, nowMs: number): TrackedBox | null {
     const entry = this.removed.get(nw.key)
-    if (entry === undefined) return
+    if (entry === undefined) return null
     const [when, old] = entry
-    if (nowMs - when > RESTORE_WINDOW_MS) return
-    if (old.w === nw.w && old.h === nw.h && old.clipped === nw.clipped && (nw.label === null || nw.label === old.label)) {
-      nw.takeDataFrom(old)
-      this.removed.delete(nw.key)
-    }
+    if (nowMs - when > RESTORE_WINDOW_MS) return null
+    const same = old.w === nw.w && old.h === nw.h && old.clipped === nw.clipped && (nw.label === null || nw.label === old.label)
+    return same ? old : null
+  }
+
+  private restore(nw: TrackedBox, nowMs: number): void {
+    const old = this.restorable(nw, nowMs)
+    if (old === null) return
+    nw.takeDataFrom(old)
+    this.removed.delete(nw.key)
   }
 
   private offLattice(geom: GridGeometry): boolean {
@@ -316,7 +323,7 @@ export class VendorSession {
       const cells = b.cells()
       if ([...cells].every((key) => top <= rowOfKey(key) && rowOfKey(key) < bottom) && !intersects(cells, uncertain)) inView.set(k, b)
     }
-    const conflicts = this.conflicts(scan, inView)
+    const conflicts = this.conflicts(scan, inView, nowMs)
     if (conflicts >= REFLOW_MIN_CONFLICTS) {
       // alguém comprou uma caixa e o vendedor reempacotou o estoque. Só se refaz com uma leitura
       // limpa (sem tooltip escondendo caixas) e confirmada pela seguinte
@@ -429,8 +436,9 @@ export class VendorSession {
     return true
   }
 
-  /** Caixas inteiras do scan que caem sobre caixas guardadas de outra forma ou em outro lugar. */
-  private conflicts(scan: GridScan, inView: ReadonlyMap<string, TrackedBox>): number {
+  /** Caixas inteiras do scan que caem sobre caixas guardadas de outra forma ou em outro lugar. A caixa que volta igual
+   * ao lugar de onde saiu há pouco não conta: é a leitura errada (tooltip, arrasto) se desfazendo, não uma compra. */
+  private conflicts(scan: GridScan, inView: ReadonlyMap<string, TrackedBox>, nowMs: number): number {
     const off = this.rowOffset
     const stored = [...inView.values()].filter((b) => !b.clipped).map((b) => b.cells())
     let n = 0
@@ -438,6 +446,7 @@ export class VendorSession {
       if (rect.clipped) continue
       const old = inView.get(cellKey(rect.col, rect.row + off))
       if (old !== undefined && old.w === rect.w && old.h === rect.h) continue
+      if (this.restorable({ key: cellKey(rect.col, rect.row + off), w: rect.w, h: rect.h, clipped: false, label: null }, nowMs)) continue
       const cells = new Set(boxCells(rect).map(([c, r]) => cellKey(c, r + off)))
       if (stored.some((s) => intersects(s, cells))) n++
     }
