@@ -1,6 +1,6 @@
 # abi-ear-js: próximos passos
 
-Atualizado em 03/11/2026, depois da publicação da v0.2 (`master` em `684b26e`, site
+Atualizado em 03/11/2026, depois da publicação da v0.2.1 (`master` em `c3c4dd2`, site
 https://nhgrave.github.io/abi-ear-js/). Lista viva: risque o que for feito e acrescente o que surgir.
 
 ## 1. Testes de campo do autor (v0.2 publicada)
@@ -27,18 +27,10 @@ Para validar os modelos que saíram de uma só gravação (2026-11-02-185459) e 
   erradas.
 - Atualizar o README ("Limitações da v0.2") com a lista real de categorias sem modelo.
 
-## 3. v0.2.1: gravação na página, só em modo local
+## 3. v0.2.1 (publicada em 03/11)
 
-Pedido do autor em 02/11. Implementada em 03/11 na branch `v0.2.1` (spec `specs/2026-11-03-v0.2.1-dev-recording-design.md`,
-plano `plans/2026-11-03-v0.2.1-dev-recording.md`). Falta o roteiro manual do autor (Task 6, Step 6 do plano) antes do
-merge na `master`.
-
-- Tirar a rota `/spike/recorder/` (página e entrada no `vite.config.ts`).
-- Gravar pela tela principal: quadros e áudio no formato que o replay e o construtor de modelos leem
-  (`session.json`, `audio.wav`, `frames/*.jpg`).
-- Histórico de gravações, se der ("se não for possível não tem problema").
-- Só com `npm run dev` (`import.meta.env.DEV`): o build publicado no Pages não pode conter nada disso.
-- As gravações ficam só no PC, nunca no repositório.
+Gravação na página só em modo local (Chrome), com `events.jsonl` do que a página fez ao vivo; grid só com a aba
+Purchase ativa; caixa lida errada no arrasto ou sob tooltip volta com a categoria; itens do vendedor não giram.
 
 ## 4. Pendências pequenas da revisão da v0.2
 
@@ -53,10 +45,20 @@ merge na `master`.
 - [ ] O replay estrito com modelos (`ABI_REPLAY_STRICT` + `ABI_LABEL_MODELS`) exige zero categorias erradas e o
   critério de atribuição da v0.1; só a 160053 é gravação de visita normal.
 - [ ] Um `Int32Array` novo por caixa a cada varredura no leitor (lixo para o coletor, dentro do orçamento).
-- [ ] Se a aba Sell do vendedor aparecer na mesma posição do grid do vendedor, ela é aceita como vendedor (como na
-  v0.1). Conferir num quadro real.
+- [x] Se a aba Sell do vendedor aparecer na mesma posição do grid do vendedor, ela é aceita como vendedor (como na
+  v0.1). (v0.2.1: `vision/vendor-tab.ts`, só a aba Purchase ativa vale.)
 
 ## 5. Calibração e backlog
+
+- Compra entre caixas do mesmo tamanho (gravação 220143, 83,9 s: uma 1x1 comprada e as 1x1 andam uma casa): a
+  reorganização não sabe qual saiu e as 1x1 recomeçam sem as pegadas. Usar os rótulos lidos naquele quadro no
+  alinhamento (`session.realign`, `reflow.align`), que hoje recebe a sessão sem rótulos.
+- Arrasto no vendedor: o lugar da caixa levantada fica vazio com uma célula vermelha, lida como caixa 1x1 por um
+  instante. Desde a v0.2.1 a caixa volta com a categoria, mas a caixa falsa aparece no grid; reconhecer a célula
+  vermelha evitaria isso (e serve de confirmação da atribuição, item abaixo).
+- Tooltip na borda direita esconde a linha entre duas caixas da coluna 7, lidas como uma só enquanto o mouse fica
+  parado (220143, 51 s). Desde a v0.2.1 elas voltam ao normal; marcar a área do tooltip como incerta evitaria a caixa
+  juntada.
 
 - Atribuição no pega e devolve rápido: na gravação 185459 ainda saem 6 caixas erradas (critério da v0.1).
 - Caixas que a página monta com outro tamanho que o app desktop: são a maior parte das pegadas "sem categoria" e "sem
@@ -65,8 +67,9 @@ merge na `master`.
 - Botão de diagnóstico local.
 - `getImageData` de cerca de 8 MB por quadro no worker de visão.
 - v0.3: preço do tooltip e rótulos em português (o autor troca o idioma do jogo para os testes locais).
-- Levar ao app desktop (abi-ear) as correções feitas na web: caixas cortadas com largura impossível (v0.1.1) e
-  rolagem ambígua não decidida pelo menor deslocamento (`estimateRowShift`, v0.2).
+- Levar ao app desktop (abi-ear) as correções feitas na web: caixas cortadas com largura impossível (v0.1.1),
+  rolagem ambígua não decidida pelo menor deslocamento (`estimateRowShift`, v0.2), aba Purchase, categoria guardada
+  da caixa que some e itens sem girar (`fits`, v0.2.1).
 - Zip portátil do app desktop para compartilhar (despriorizado: a web vem primeiro).
 
 ## 6. Como trabalhar
