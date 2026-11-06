@@ -44,13 +44,15 @@ watch(
       <button
         v-for="{ b, d } in shown"
         :key="b.uid"
-        :class="['box', { picked: d.color, hint: d.hint, selected: b.uid === selected, clipped: b.clipped, short: b.h === 1 }]"
+        :class="['box', { picked: d.color, split: d.edge, hint: d.hint, selected: b.uid === selected, clipped: b.clipped, short: b.h === 1 }]"
         :style="{
           left: pctX(b.col),
           top: pctY(b.row - first),
           width: pctX(b.w),
           height: pctY(b.h),
           '--rarity': d.color ?? undefined,
+          '--edge-high': d.edge?.high,
+          '--edge-low': d.edge?.low,
           '--lines': b.h === 1 ? (d.pct !== null ? 2 : 3) : 4,
         }"
         :title="title(b, d.text, d.pct)"
@@ -86,6 +88,16 @@ watch(
 .box:hover { border-color: var(--muted); }
 .box.hint { color: var(--muted); }
 .box.picked { background: color-mix(in srgb, var(--rarity) 32%, #14161b); border: 2px solid var(--rarity); }
+/* raridades diferentes entre os candidatos: a caixa é cortada na diagonal, sem gradiente — a maior raridade no
+   canto superior esquerdo, a menor no inferior direito, na borda e no fundo */
+.box.picked.split {
+  --tint-high: color-mix(in srgb, var(--edge-high) 32%, #14161b);
+  --tint-low: color-mix(in srgb, var(--edge-low) 32%, #14161b);
+  border: 3px solid transparent;
+  background:
+    linear-gradient(to bottom right, var(--tint-high) 50%, var(--tint-low) 50%) padding-box,
+    linear-gradient(to bottom right, var(--edge-high) 50%, var(--edge-low) 50%) border-box;
+}
 .box.clipped { border-style: dashed; }
 .box.selected { outline: 2px solid #fff; outline-offset: -1px; z-index: 1; }
 .box img { flex: 1 1 auto; min-height: 0; max-width: 100%; object-fit: contain; }
@@ -96,6 +108,6 @@ watch(
 }
 .box.short .badge { bottom: auto; top: 2px; }
 .pct { font-weight: 700; font-variant-numeric: tabular-nums; }
-.name { hyphens: auto; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: var(--lines); -webkit-box-orient: vertical; overflow: hidden; }
+.name { hyphens: auto; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: var(--lines); -webkit-box-orient: vertical; overflow: hidden; }
 .box.hint .name { font-size: 9.5px; }
 </style>
