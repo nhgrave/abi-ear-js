@@ -4,7 +4,9 @@
 import type { GridGeometry } from './types'
 
 export type VendorTab = 'purchase' | 'sell' | null
-export type Rgba = { w: number; h: number; data: Uint8ClampedArray | Uint8Array }
+/** Quadro em cores. `x0`: coluna da tela onde a imagem começa (o worker lê só a metade direita); `w` é a largura
+ * da imagem, não a da tela. */
+export type Rgba = { w: number; h: number; data: Uint8ClampedArray | Uint8Array; x0?: number }
 
 // a barra fica entre o grid e até um cabeçalho de uma linha acima dele (o "Mysterious Supplies" do Field Merchant)
 const BAND_TOP = 1.6 // células acima do topo do grid
@@ -27,16 +29,17 @@ export function tabRows(img: Rgba, g: GridGeometry): { y: number; left: number; 
     [g.x0 + 0.6 * p, mid - 0.4 * p],
     [mid + 0.4 * p, g.x0 + g.cols * p - 0.6 * p],
   ]
+  const ox = img.x0 ?? 0
   const rows: { y: number; left: number; right: number }[] = []
   const ya = Math.max(0, Math.round(g.y0 - BAND_TOP * p))
   const yb = Math.min(img.h, Math.round(g.y0 - BAND_BOTTOM * p))
   for (let y = ya; y < yb; y++) {
     const [left, right] = halves.map(([xa, xb]) => {
-      const a = Math.max(0, Math.round(xa))
-      const b = Math.min(img.w, Math.round(xb))
+      const a = Math.max(ox, Math.round(xa))
+      const b = Math.min(ox + img.w, Math.round(xb))
       let n = 0
       for (let x = a; x < b; x++) {
-        const i = (y * img.w + x) * 4
+        const i = (y * img.w + x - ox) * 4
         if (warm(img.data[i], img.data[i + 1], img.data[i + 2])) n++
       }
       return b > a ? n / (b - a) : 0

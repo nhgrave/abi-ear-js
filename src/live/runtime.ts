@@ -18,13 +18,15 @@ const HEALTH_INTERVAL_MS = 500
 const PROFILE_KEY = 'abi-ear.profile'
 
 type Ref = { soundId: number; name: string; samples: Float32Array }
-export type LastPickup = { sound: string; score: number; outcome: PickupOutcome['kind']; reason: string | null }
+/** `uid`: a caixa que recebeu a pegada (a interface a seleciona), null se nenhuma. */
+export type LastPickup = { sound: string; score: number; outcome: PickupOutcome['kind']; reason: string | null; uid: number | null }
 
 export type RuntimeState = {
   loading: boolean
   ready: boolean // base e sons carregados
   starting: boolean
   sharing: boolean
+  example: boolean // mostrando o exemplo (vendedor e pegadas de mentira), não o jogo
   problems: MessageKey[]
   health: { audio: Health; screen: Health; vendor: Health; cursor: Health }
   view: SessionView
@@ -36,6 +38,12 @@ export type RuntimeState = {
 }
 
 const EMPTY_VIEW: SessionView = { geometry: null, rowOffset: 0, extent: [0, 0], boxes: [] }
+const idleHealth = (): RuntimeState['health'] => ({
+  audio: { level: 'gray', reason: 'screen.off' },
+  screen: { level: 'gray', reason: 'screen.off' },
+  vendor: { level: 'gray', reason: 'vendor.none' },
+  cursor: { level: 'gray', reason: 'cursor.idle' },
+})
 
 function readProfile(): string | null {
   try {
@@ -88,13 +96,9 @@ export function createRuntime() {
     ready: false,
     starting: false,
     sharing: false,
+    example: false,
     problems: [],
-    health: {
-      audio: { level: 'gray', reason: 'screen.off' },
-      screen: { level: 'gray', reason: 'screen.off' },
-      vendor: { level: 'gray', reason: 'vendor.none' },
-      cursor: { level: 'gray', reason: 'cursor.idle' },
-    },
+    health: idleHealth(),
     view: EMPTY_VIEW,
     profile: parseProfileChoice(readProfile()),
     lastPickup: null,
@@ -122,7 +126,7 @@ export function createRuntime() {
   const publishState = () => events.state(performance.timeOrigin + performance.now(), state.health, state.problems)
 
   const refresh = () => {
-    if (controller) state.view = controller.view()
+    if (controller && !state.example) state.view = controller.view()
   }
 
   async function load(): Promise<void> {
@@ -150,7 +154,13 @@ export function createRuntime() {
     const sound = soundName(out.event.soundId)
     const box = out.kind === 'assigned' ? (controller?.session.boxByUid(out.uid) ?? null) : null
     events.emit(pickupEvent(out, sound, box, performance.timeOrigin))
-    state.lastPickup = { sound, score: out.event.score, outcome: out.kind, reason: out.kind === 'unassigned' ? out.reason : null }
+    state.lastPickup = {
+      sound,
+      score: out.event.score,
+      outcome: out.kind,
+      reason: out.kind === 'unassigned' ? out.reason : null,
+      uid: out.kind === 'assigned' ? out.uid : null,
+    }
     if (out.kind === 'unassigned' && out.reason === 'no-cursor') lastNoCursorMs = performance.now()
     refresh()
   }
@@ -175,6 +185,7 @@ export function createRuntime() {
 
   async function start(): Promise<void> {
     if (state.starting || state.sharing || !controller || !state.ready) return
+    if (state.example) leaveExample()
     state.problems = []
     if (!navigator.mediaDevices?.getDisplayMedia) {
       state.problems = ['problem.browser']
@@ -327,8 +338,35 @@ export function createRuntime() {
   }
 
   function clear(): void {
+    if (state.example) return leaveExample()
     controller?.clear()
     state.lastPickup = null
+    refresh()
+  }
+
+  /** Mostra o exemplo: um vendedor de verdade com pegadas de mentira, sem o jogo. `selectBox`: abre o painel de uma
+   * caixa pega (sem ela, a ajuda fica à vista). */
+  async function showExample(selectBox = true): Promise<void> {
+    if (!ds || state.sharing) return
+    const { exampleView } = await import('../example/example')
+    state.example = true
+    state.problems = []
+    state.view = exampleView(ds)
+    const ok = (reason: string) => ({ level: 'green' as const, reason })
+    state.health = { audio: ok('audio.ok'), screen: ok('screen.ok'), vendor: ok('vendor.ok'), cursor: ok('cursor.ok') }
+    const picked = state.view.boxes.find((b) => b.picks > 0 && b.candidates.length > 1)
+    state.lastPickup = picked
+      ? { sound: 'Item_Misc_ElectronicDevice_Up', score: 0.93, outcome: 'assigned', reason: null, uid: selectBox ? picked.uid : null }
+      : null
+  }
+
+  /** Volta para a página vazia, pronta para compartilhar a tela. */
+  function leaveExample(): void {
+    if (!state.example) return
+    state.example = false
+    state.health = idleHealth()
+    state.lastPickup = null
+    controller?.clear()
     refresh()
   }
 
@@ -338,7 +376,7 @@ export function createRuntime() {
   /** Assina o que a análise ao vivo faz (pegadas, saúde, avisos); devolve o cancelamento. */
   const onEvent = (fn: (e: LiveEvent) => void): (() => void) => events.on(fn)
 
-  return { state, load, start, stop, setProfile, clear, dataset: () => ds, stream, onEvent }
+  return { state, load, start, stop, setProfile, clear, showExample, leaveExample, dataset: () => ds, stream, onEvent }
 }
 
 export type Runtime = ReturnType<typeof createRuntime>

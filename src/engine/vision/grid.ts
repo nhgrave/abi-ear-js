@@ -139,64 +139,58 @@ function colsWithAny(mask: Mask, w: number, rows: Span, cols: Span): number {
 // morfologia (no lugar de cv2.morphologyEx e cv2.erode)
 
 /** cv2.morphologyEx(MORPH_OPEN) com retângulo 1×n ao longo de um eixo: erosão e depois dilatação, âncora em
- * n//2 (janela [i - n//2, i - n//2 + n - 1] nas duas). Fora da imagem não conta: na erosão a borda vale o
- * máximo, na dilatação o mínimo. `count` sequências de `len` pixels, a k-ésima começa em `first(k)` e anda
- * de `step` em `step`. */
-function open1d(src: Mask, dst: Mask, n: number, len: number, count: number, first: (k: number) => number, step: number) {
+ * a = n//2 (janela [i - a, i - a + n - 1] nas duas). Fora da imagem não conta: na erosão a borda vale o máximo,
+ * na dilatação o mínimo.
+ *
+ * Feito por trechos acesos (as máscaras de linha são esparsas), com o mesmo resultado: num trecho máximo [s, e)
+ * de uma linha de `len` pixels, a erosão acende i em [s + a, e + a - n] (sem o limite do lado em que o trecho
+ * encosta na borda), e a dilatação acende [j - n + a + 1, j + a] para cada j da erosão. */
+function openRun(dst: Mask, s: number, e: number, n: number, len: number, at: (i: number) => number): void {
   const a = n >> 1
-  const zeros = new Int32Array(len + 1)
-  const ero = new Int32Array(len + 1)
-  for (let k = 0; k < count; k++) {
-    const base = first(k)
-    for (let i = 0; i < len; i++) zeros[i + 1] = zeros[i] + (src[base + i * step] ? 0 : 1)
-    for (let i = 0; i < len; i++) {
-      const lo = Math.max(0, i - a)
-      const hi = Math.min(len, i - a + n)
-      ero[i + 1] = ero[i] + (zeros[hi] - zeros[lo] === 0 ? 1 : 0)
-    }
-    for (let i = 0; i < len; i++) {
-      const lo = Math.max(0, i - a)
-      const hi = Math.min(len, i - a + n)
-      dst[base + i * step] = ero[hi] - ero[lo] > 0 ? 1 : 0
-    }
-  }
+  const eLo = s === 0 ? 0 : s + a
+  const eHi = e === len ? len - 1 : Math.min(e - 1, e + a - n)
+  if (eHi < Math.max(eLo, s)) return
+  const lo = Math.max(0, Math.max(eLo, s) - n + a + 1)
+  const hi = Math.min(len - 1, eHi + a)
+  for (let i = lo; i <= hi; i++) dst[at(i)] = 1
 }
 
-function openHorizontal(src: Mask, w: number, h: number, n: number): Mask {
+export function openHorizontal(src: Mask, w: number, h: number, n: number): Mask {
   const dst = new Uint8Array(w * h)
-  open1d(src, dst, n, w, h, (y) => y * w, 1)
-  return dst
-}
-
-function openVertical(src: Mask, w: number, h: number, n: number): Mask {
-  const dst = new Uint8Array(w * h)
-  open1d(src, dst, n, h, w, (x) => x, w)
-  return dst
-}
-
-/** True onde há n pixels seguidos da máscara a partir do ponto, para frente ou para trás no eixo
- * (axis 1 = ao longo de x, 0 = ao longo de y). Erosão com o elemento ancorado numa ponta: fora da imagem
- * conta como apagado. */
-function runs(mask: Mask, w: number, h: number, n: number, axis: 0 | 1, forward: boolean): Mask {
-  const out = new Uint8Array(w * h)
-  if (axis === 1) {
-    for (let y = 0; y < h; y++) {
-      let cnt = 0
-      const row = y * w
-      if (forward) {
-        for (let x = w - 1; x >= 0; x--) out[row + x] = (cnt = mask[row + x] ? cnt + 1 : 0) >= n ? 1 : 0
-      } else {
-        for (let x = 0; x < w; x++) out[row + x] = (cnt = mask[row + x] ? cnt + 1 : 0) >= n ? 1 : 0
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    const at = (i: number) => row + i
+    let start = -1
+    for (let x = 0; x < w; x++) {
+      if (src[row + x]) {
+        if (start < 0) start = x
+      } else if (start >= 0) {
+        openRun(dst, start, x, n, w, at)
+        start = -1
       }
     }
-  } else {
-    const cnt = new Int32Array(w)
-    for (let k = 0; k < h; k++) {
-      const row = (forward ? h - 1 - k : k) * w
-      for (let x = 0; x < w; x++) out[row + x] = (cnt[x] = mask[row + x] ? cnt[x] + 1 : 0) >= n ? 1 : 0
+    if (start >= 0) openRun(dst, start, w, n, w, at)
+  }
+  return dst
+}
+
+export function openVertical(src: Mask, w: number, h: number, n: number): Mask {
+  const dst = new Uint8Array(w * h)
+  const start = new Int32Array(w).fill(-1) // início do trecho aceso em andamento em cada coluna
+  // linha a linha (acesso contínuo na memória); cada trecho vertical fecha quando a coluna apaga
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    for (let x = 0; x < w; x++) {
+      if (src[row + x]) {
+        if (start[x] < 0) start[x] = y
+      } else if (start[x] >= 0) {
+        openRun(dst, start[x], y, n, h, (i) => i * w + x)
+        start[x] = -1
+      }
     }
   }
-  return out
+  for (let x = 0; x < w; x++) if (start[x] >= 0) openRun(dst, start[x], h, n, h, (i) => i * w + x)
+  return dst
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -419,18 +413,23 @@ export function findOverlays(gray: Gray, geom: GridGeometry): Rect[] {
   for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) bright[y * bw + x] = gray.data[(y + sy0) * w + x + sx0] > OVERLAY_BRIGHT ? 1 : 0
   const n = Math.max(6, pyRound(0.12 * pitch))
   const k = Math.max(2, pyRound(pitch / 32)) // o "L" é fino: o pixel na diagonal, para dentro do tooltip, é escuro
-  const rightFwd = runs(bright, bw, bh, n, 1, true)
-  const downFwd = runs(bright, bw, bh, n, 0, true)
-  const rightBack = runs(bright, bw, bh, n, 1, false)
-  const downBack = runs(bright, bw, bh, n, 0, false)
+  // n pixels acesos seguidos a partir de (x, y) num sentido (fora da imagem conta como apagado), conferido só
+  // nos candidatos a canto
+  const run = (x: number, y: number, dx: number, dy: number): boolean => {
+    const xe = x + dx * (n - 1)
+    const ye = y + dy * (n - 1)
+    if (xe < 0 || xe >= bw || ye < 0 || ye >= bh) return false
+    for (let k = 0, i = y * bw + x, step = dy * bw + dx; k < n; k++, i += step) if (!bright[i]) return false
+    return true
+  }
   const tl: [number, number][] = [] // (y, x) na ordem de np.nonzero, só os 100 primeiros
   const br: [number, number][] = []
   for (let y = 0; y < bh; y++) {
     for (let x = 0; x < bw; x++) {
       const i = y * bw + x
       if (!bright[i]) continue
-      if (tl.length < 100 && y < bh - k && x < bw - k && !bright[i + k * bw + k] && rightFwd[i] && downFwd[i]) tl.push([y, x])
-      if (br.length < 100 && y >= k && x >= k && !bright[i - k * bw - k] && rightBack[i] && downBack[i]) br.push([y, x])
+      if (tl.length < 100 && y < bh - k && x < bw - k && !bright[i + k * bw + k] && run(x, y, 1, 0) && run(x, y, 0, 1)) tl.push([y, x])
+      if (br.length < 100 && y >= k && x >= k && !bright[i - k * bw - k] && run(x, y, -1, 0) && run(x, y, 0, -1)) br.push([y, x])
     }
   }
 

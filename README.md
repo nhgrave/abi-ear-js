@@ -11,6 +11,9 @@ mostra, num grid espelhado, os itens prováveis de cada caixa, com a porcentagem
 link, share your entire screen with system audio, and drag the boxes at the vendor. The page reads each box's
 category (game in English) and picks the map family by itself.
 
+Para ver como fica sem abrir o jogo, clique em **Ver exemplo** na página, ou abra
+https://nhgrave.github.io/abi-ear-js/?preview. O exemplo é um vendedor de verdade com pegadas de mentira.
+
 ## Como funciona
 
 - **Passivo:** a única entrada é o compartilhamento de tela do navegador. Nada lê a memória do jogo, injeta comandos
@@ -43,9 +46,9 @@ category (game in English) and picks the map family by itself.
 
 - Só lê o jogo em **inglês**. Com o jogo em outro idioma a página funciona como a v0.1: sem categoria, e o mapa e o
   modo escolhidos à mão (ou "Todos os mapas").
-- Os modelos de algumas categorias (Computer Parts, Electronics, Instruments, Military Items, Collectibles,
-  Uncommon Collectibles, Rare Mystery Cargo) saíram de uma só gravação. Uncommon Mystery Cargo de 3 de largura
-  ainda não tem modelo e fica sem categoria.
+- Os modelos de algumas categorias saíram de poucas amostras: Medical Supplies, Military Items e Uncommon Mystery
+  Cargo de 1 e de 3 de largura, Uncommon Military Items, Rare Mystery Cargo e Paper. Ainda sem modelo (ficam sem
+  categoria): Rare Medical Supplies, Rare Collectibles e as larguras que não apareceram nas gravações.
 - O preço do tooltip ainda não entra na conta.
 - Pegar e devolver caixas muito rápido ainda pode atribuir a pegada à caixa vizinha. Em visitas normais, 96% das
   pegadas com som saíram certas na gravação de teste.
@@ -56,6 +59,7 @@ category (game in English) and picks the map family by itself.
 ```bash
 npm ci
 npm run dev                    # http://127.0.0.1:5173/ (gravação: seção no fim da página, só neste modo)
+                               # http://127.0.0.1:5173/?preview abre o exemplo (o mesmo do botão "Ver exemplo")
 npm test && npm run typecheck && npm run build
 node scripts/sync-assets.mjs   # atualiza public/data/ (base, sons e ícones) quando o jogo muda
 ```
