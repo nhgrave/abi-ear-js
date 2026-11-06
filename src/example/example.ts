@@ -1,6 +1,6 @@
-/** Prévia do modo local (npm run dev, `?preview`): a tela com um vendedor de verdade, sem o jogo. Roda o motor de
- * verdade (Controller) com o estoque da gravação 2026-11-03-220143 e pegadas com os sons dela, para ajustar o layout.
- * Nunca entra no build publicado. */
+/** Exemplo (botão "Ver exemplo" ou `?preview`): a tela com um vendedor de verdade, sem o jogo, para quem chega entender
+ * a página. Roda o motor de verdade (Controller) com o estoque da gravação 2026-11-03-220143 e pegadas com sons do jogo;
+ * duas caixas trocaram de item para o exemplo mostrar mais variedade. Não usa nenhuma gravação: tudo está aqui. */
 import { Controller } from '../engine/controller'
 import type { Dataset } from '../engine/data/dataset'
 import type { FrameResult, LabelReading } from '../engine/pipeline'
@@ -11,7 +11,9 @@ const GEOM: GridGeometry = { x0: 1255, y0: 190, pitch: 64, cols: 9, rows: 11 }
 
 type Spec = [col: number, row: number, w: number, h: number, label: string | null, sound?: string]
 
-// estoque do Field Merchant na gravação 220143 (categoria lida e, nas caixas pegas, o som ouvido)
+// estoque do Field Merchant na gravação 220143 (categoria lida e, nas caixas pegas, o som ouvido). Mudanças para o
+// exemplo: as caixas 1,3 e 3,3 eram Studio Monitor e viraram Antique Teapot e Deluxe Tea Set; a 3,1 (não pega) virou
+// um Skyhook Synchronized Array Mirror
 const STOCK: Spec[] = [
   [0, 0, 1, 1, 'Uncommon Mystery Cargo'],
   [1, 0, 1, 1, 'Collectibles', 'Item_Misc_Med_Statue_Up'],
@@ -24,15 +26,15 @@ const STOCK: Spec[] = [
   [8, 0, 1, 1, 'Collectibles'],
   [0, 1, 2, 1, 'Mystery Cargo'],
   [2, 1, 1, 2, 'Mystery Cargo', 'Item_Misc_Big_Blunt_Up'],
-  [3, 1, 1, 2, 'Mystery Cargo'],
+  [3, 1, 1, 2, 'Uncommon Collectibles', 'Item_Misc_Small_Metal_Blunt_Up'],
   [4, 1, 1, 2, 'Mystery Cargo'],
   [5, 1, 1, 2, 'Uncommon Collectibles', 'Item_Misc_Med_Statue_Up'],
   [6, 1, 1, 2, 'Mystery Cargo'],
   [7, 1, 2, 1, 'Mystery Cargo'],
   [0, 2, 1, 2, 'Military Items'],
   [7, 2, 2, 2, 'Computer Parts', 'Item_Misc_Big_Wood_Up'],
-  [1, 3, 2, 2, 'Mystery Cargo', 'Item_Misc_Big_Wood_Up'],
-  [3, 3, 2, 2, 'Computer Parts', 'Item_Misc_Big_Wood_Up'],
+  [1, 3, 2, 2, 'Mystery Cargo', 'Prop_Acc_Teapot_UP'],
+  [3, 3, 2, 2, 'Uncommon Mystery Cargo', 'Item_Misc_Small_Glass_Up'],
   [5, 3, 2, 2, 'Mystery Cargo', 'Item_Misc_Small_Metal_Crisp_Up'],
   [7, 4, 2, 2, null, 'Item_Misc_ElectronicDevice_Up'],
   [0, 5, 2, 2, 'Mystery Cargo', 'Item_Misc_Small_Metal_Blunt_Up'],
@@ -47,7 +49,7 @@ const STOCK: Spec[] = [
 const center = ([c, r, w, h]: Spec): [number, number] => [GEOM.x0 + (c + w / 2) * GEOM.pitch, GEOM.y0 + (r + h / 2) * GEOM.pitch]
 
 /** O retrato da sessão depois de ver o estoque e pegar as caixas que têm som. */
-export function previewView(ds: Dataset): SessionView {
+export function exampleView(ds: Dataset): SessionView {
   const c = new Controller(ds)
   c.setProfile('auto')
   const rects: BoxRect[] = STOCK.map(([col, row, w, h]) => ({ col, row, w, h, clipped: false }))

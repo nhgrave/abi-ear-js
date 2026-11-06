@@ -39,22 +39,36 @@ watch(
     if (p?.uid != null) selected.value = p.uid
   },
 )
-const helpLines = ['help.pick', 'help.category', 'help.color', 'help.badge', 'help.dashed'] as const
+// o endereço acompanha o exemplo, para o link poder ser copiado
+const setPreviewParam = (on: boolean) => {
+  const url = new URL(location.href)
+  url.searchParams.delete('preview')
+  const rest = url.searchParams.toString()
+  url.search = on ? (rest ? `?preview&${rest}` : '?preview') : rest
+  history.replaceState(null, '', url)
+}
+async function openExample(selectBox = true) {
+  selected.value = null
+  await rt.showExample(selectBox)
+  if (s.example) setPreviewParam(true)
+}
+function leaveExample() {
+  rt.leaveExample()
+  selected.value = null
+  setPreviewParam(false)
+}
+function start() {
+  if (s.example) leaveExample()
+  rt.start()
+}
+const helpLines = ['help.pick', 'help.category', 'help.color', 'help.icon', 'help.badge', 'help.dashed'] as const
 
 onMounted(async () => {
   setLocale(locale.value)
   await rt.load()
-  // prévia do layout sem o jogo (?preview): só com npm run dev, como a gravação
-  // (?preview=help: sem caixa selecionada)
-  const preview = import.meta.env.DEV ? new URLSearchParams(location.search).get('preview') : null
-  if (preview !== null && rt.dataset()) {
-    const { previewView } = await import('./dev/preview')
-    s.view = previewView(rt.dataset()!)
-    const ok = (reason: string) => ({ level: 'green' as const, reason })
-    s.health = { audio: ok('audio.ok'), screen: ok('screen.ok'), vendor: ok('vendor.ok'), cursor: ok('cursor.ok') }
-    const picked = s.view.boxes.find((b) => b.picks > 0 && b.candidates.length > 1)
-    if (picked) s.lastPickup = { sound: 'Item_Misc_ElectronicDevice_Up', score: 0.93, outcome: 'assigned', reason: null, uid: preview === 'help' ? null : picked.uid }
-  }
+  // ?preview abre o exemplo direto (link para mandar a alguém); ?preview=help mostra a ajuda em vez de uma caixa
+  const q = new URLSearchParams(location.search).get('preview')
+  if (q !== null) await openExample(q !== 'help')
 })
 </script>
 
@@ -68,9 +82,10 @@ onMounted(async () => {
       <div class="controls">
         <Indicators :health="s.health" :locale="locale" />
         <ProfileSelect :options="options" :model-value="s.profile" :locale="locale" @update:model-value="rt.setProfile" />
-        <button v-if="!s.sharing" class="primary" :disabled="!s.ready || s.starting" @click="rt.start">{{ t('start', locale) }}</button>
+        <button v-if="!s.sharing" class="primary" :disabled="!s.ready || s.starting" @click="start">{{ t('start', locale) }}</button>
         <button v-else @click="rt.stop">{{ t('stop', locale) }}</button>
-        <button @click="rt.clear(); selected = null">{{ t('clear', locale) }}</button>
+        <button v-if="!s.sharing && !s.example" :disabled="!s.ready" @click="openExample()">{{ t('example.open', locale) }}</button>
+        <button @click="s.example ? leaveExample() : (rt.clear(), (selected = null))">{{ t('clear', locale) }}</button>
         <select class="lang" :value="locale" :aria-label="t('language', locale)" @change="setLocale(($event.target as HTMLSelectElement).value as Locale)">
           <option value="pt">PT</option>
           <option value="en">EN</option>
@@ -81,6 +96,11 @@ onMounted(async () => {
     <ul v-if="s.problems.length" class="problems">
       <li v-for="p in s.problems" :key="p">{{ t(p, locale) }}</li>
     </ul>
+
+    <div v-if="s.example" class="example">
+      <span>{{ t('example.banner', locale) }}</span>
+      <button @click="leaveExample">{{ t('example.leave', locale) }}</button>
+    </div>
 
     <SetupGuide v-if="!s.sharing && s.view.boxes.length === 0" :locale="locale" />
 
@@ -121,6 +141,11 @@ h1 { margin: 0; font-size: 22px; }
 .tagline { margin: 2px 0 0; color: var(--muted); font-size: 14px; max-width: 46ch; }
 .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .lang { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px; font: inherit; }
+.example {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  padding: 8px 12px 8px 16px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); border: 1px solid var(--accent);
+  border-radius: 8px; font-size: 14px;
+}
 .problems { margin: 0; padding: 10px 16px 10px 32px; background: #3a1f1f; border: 1px solid var(--red); border-radius: 8px; }
 /* grid do tamanho do jogo em 1080p (células de 64 px) quando cabe; o painel fica com o resto */
 .main { display: grid; grid-template-columns: minmax(0, 578px) minmax(0, 1fr); gap: 16px; align-items: start; }

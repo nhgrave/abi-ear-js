@@ -11,6 +11,9 @@ mostra, num grid espelhado, os itens prováveis de cada caixa, com a porcentagem
 link, share your entire screen with system audio, and drag the boxes at the vendor. The page reads each box's
 category (game in English) and picks the map family by itself.
 
+Para ver como fica sem abrir o jogo, clique em **Ver exemplo** na página, ou abra
+https://nhgrave.github.io/abi-ear-js/?preview. O exemplo é um vendedor de verdade com pegadas de mentira.
+
 ## Como funciona
 
 - **Passivo:** a única entrada é o compartilhamento de tela do navegador. Nada lê a memória do jogo, injeta comandos
@@ -56,7 +59,7 @@ category (game in English) and picks the map family by itself.
 ```bash
 npm ci
 npm run dev                    # http://127.0.0.1:5173/ (gravação: seção no fim da página, só neste modo)
-                               # http://127.0.0.1:5173/?preview mostra um vendedor de exemplo, sem o jogo
+                               # http://127.0.0.1:5173/?preview abre o exemplo (o mesmo do botão "Ver exemplo")
 npm test && npm run typecheck && npm run build
 node scripts/sync-assets.mjs   # atualiza public/data/ (base, sons e ícones) quando o jogo muda
 ```
