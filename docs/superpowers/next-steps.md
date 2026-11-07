@@ -91,6 +91,11 @@ Purchase ativa; caixa lida errada no arrasto ou sob tooltip volta com a categori
   - Gravações para isso: mouse parado sobre cada caixa antes de pegar, caixas da mesma categoria com preços
     diferentes.
 
+- [x] Base 1.0.0.151.17 (27/10) do abi-tracker, que substitui o abibuilder.com como fonte (`scripts/sync-tracker.mjs`).
+  A extração reproduz a base antiga campo a campo; o que mudou é do jogo: pesos dos itens em 42 dos 82 grupos (158
+  dos 242 pools), o Double-Neck Lute fora de um pool da Mystery Cargo de 70.000, e os perfis sem mapa 6 e 9 (com 68
+  pools) fora da base. Itens, tamanhos, sons, categorias, preços das caixas e imagens não mudaram.
+
 ## 6. Como trabalhar
 
 - Delegar a outros agentes (Codex, Antigravity) só funciona numa sessão aberta pelo Houston: confira
