@@ -70,7 +70,7 @@ const pt = {
   'help.badge': '+N: outros itens possíveis com o mesmo som e tamanho.',
   'help.dashed': 'Borda tracejada: caixa cortada na beira da tela do vendedor.',
   'footer.base': 'Base {version}, atualizada em {date}.',
-  'footer.credits': 'Dados, sons e imagens: abibuilder.com, abi-tracker e hexaov91/abi-assets.',
+  'footer.credits': 'Dados, sons e imagens: abi-tracker e hexaov91/abi-assets.',
   'footer.untested': 'Resolução {w}×{h} ainda não testada.',
   'footer.passive': 'Ferramenta passiva: só lê o compartilhamento de tela. Usar é decisão sua.',
 } as const
@@ -148,7 +148,7 @@ const en: Record<MessageKey, string> = {
   'help.badge': '+N: other possible items with the same sound and size.',
   'help.dashed': 'Dashed border: box cut off at the edge of the vendor view.',
   'footer.base': 'Database {version}, updated {date}.',
-  'footer.credits': 'Data, sounds and images: abibuilder.com, abi-tracker and hexaov91/abi-assets.',
+  'footer.credits': 'Data, sounds and images: abi-tracker and hexaov91/abi-assets.',
   'footer.untested': 'Resolution {w}×{h} not tested yet.',
   'footer.passive': 'Passive tool: it only reads the screen share. Using it is your call.',
 }

@@ -61,8 +61,12 @@ npm ci
 npm run dev                    # http://127.0.0.1:5173/ (gravação: seção no fim da página, só neste modo)
                                # http://127.0.0.1:5173/?preview abre o exemplo (o mesmo do botão "Ver exemplo")
 npm test && npm run typecheck && npm run build
-node scripts/sync-assets.mjs   # atualiza public/data/ (base, sons e ícones) quando o jogo muda
+node scripts/sync-tracker.mjs  # atualiza public/data/ (base, sons e ícones) do abi-tracker quando o jogo muda
 ```
+
+A sincronização abre a página do Merchant do abi-tracker num Chromium sem tela e pede os dados ao carregador da própria
+página (o site os entrega codificados). Ela usa o Chromium do Playwright (`npx playwright-core install chromium`) ou
+outro em `CHROMIUM_PATH`. No WSL, o Chromium precisa da `libnss3` (`sudo apt install libnss3`).
 
 **Gravar uma sessão** (só com `npm run dev` e só no Google Chrome, porque o Brave vem sem o seletor de pasta; o build publicado não tem gravação, e `npm run build` falha se algo
 dela vazar para o `dist/`): na seção "Gravação (modo local)", no fim da página, escolha uma pasta do PC uma vez (ela
@@ -71,8 +75,8 @@ gravação vira uma subpasta `AAAA-MM-DD-HHMMSS` com `session.json`, `audio.wav`
 a análise ao vivo fez: pegadas, indicadores e avisos, mais os erros do console). O histórico lista as gravações da
 pasta, com os quadros salvos por segundo, e copia o nome de cada uma. As gravações ficam só no PC.
 
-Os testes de paridade usam o gabarito exportado do app desktop (`abi-ear/tools/export_golden.py`) para
-`tests/fixtures/`, que fica fora do git. Sem ele, esses testes são pulados. O replay de uma gravação real é o teste
+O app desktop (abi-ear) não recebe mais manutenção: só esta versão web segue. Os testes de paridade usam o gabarito
+exportado dele uma vez (`abi-ear/tools/export_golden.py`) para `tests/fixtures/`, que fica fora do git. Sem ele, esses testes são pulados. O replay de uma gravação real é o teste
 de aceitação do motor. Ele compara com o `events.jsonl` da gravação, quando ela tem um, e com o log do app desktop
 só se `ABI_APP_LOG` for passado (o critério estrito vale só com o log do app):
 
@@ -82,7 +86,8 @@ ABI_REPLAY=<pasta da gravação> [ABI_APP_LOG=<abi-ear.log>] ABI_LABEL_MODELS=pu
 ```
 
 Os modelos de rótulo (`public/data/labels/en.json`) saem das gravações e da categoria que o log do app desktop
-registrou em cada pegada:
+registrou em cada pegada (gravações até 03/11; as novas, sem o app, vão precisar de um gabarito tirado dos próprios
+quadros):
 
 ```bash
 ABI_LABEL_BUILD=<pastas de gravação, separadas por vírgula> ABI_APP_LOG=<abi-ear.log> \
@@ -94,6 +99,6 @@ Cada push na `master` publica o site no GitHub Pages (`.github/workflows/pages.y
 
 ## Créditos
 
-Dados, sons e imagens: [abibuilder.com](https://abibuilder.com/merchant), que credita o
-[abi-tracker](https://abi-tracker.azurewebsites.net), e [hexaov91/abi-assets](https://github.com/hexaov91/abi-assets).
+Dados, sons e imagens: [abi-tracker](https://abi-tracker.azurewebsites.net/GameInfo/Merchant) e
+[hexaov91/abi-assets](https://github.com/hexaov91/abi-assets), onde o abi-tracker publica as imagens.
 Os sons e as imagens são do jogo.

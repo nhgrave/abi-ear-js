@@ -1,14 +1,16 @@
 # abi-ear-js: próximos passos
 
-Atualizado em 03/11/2026, depois da publicação da v0.2.1 (`master` em `c3c4dd2`, site
+Atualizado em 06/11/2026, depois da publicação da v0.2.2 (`master` em `8c42da1`, site
 https://nhgrave.github.io/abi-ear-js/). Lista viva: risque o que for feito e acrescente o que surgir.
+
+Só a versão web segue: o app desktop (abi-ear) não recebe mais manutenção (decisão de 06/11), e as gravações são
+feitas sem ele aberto.
 
 ## 1. Testes de campo do autor (v0.2 publicada)
 
 - [ ] Abrir o site e conferir: seletor com "Automático (pelos rótulos)" como padrão, linha "Categoria" no painel da
   caixa, nenhum erro ao carregar. (Não deu para abrir a página no navegador a partir do WSL.)
-- [ ] Uma visita completa ao vendedor com o jogo em inglês, comparando com o app desktop: categoria de cada caixa,
-  mapa escolhido sozinho, itens.
+- [ ] Uma visita completa ao vendedor com o jogo em inglês: categoria de cada caixa, mapa escolhido sozinho, itens.
 - [ ] Compartilhando só a janela do jogo: o som do Discord fica de fora? Os indicadores Vendedor e Cursor ficam verdes?
 - [ ] Trocar o mapa à mão, recarregar e ver a escolha mantida.
 
@@ -21,10 +23,13 @@ Para validar os modelos que saíram de uma só gravação (2026-11-02-185459) e 
 - Sem modelo nenhum: Medical Supplies, Rare Medical Supplies, Rare Collectibles, Uncommon Military Items.
 - Larguras sem modelo: Uncommon Mystery Cargo de 3 de largura, e outras que aparecerem (Collectibles de 2, Rare Mystery
   Cargo de 1 e de 3...).
-- Como: gravar com o app desktop aberto (o log dele é o gabarito), pegar caixas de várias categorias, depois
-  reconstruir os modelos com todas as gravações e rodar o replay deixando cada gravação de fora (comandos no README,
-  seção Desenvolvimento, e no adendo da spec `specs/2026-11-02-v0.2-labels-design.md`). Critério: zero categorias
-  erradas.
+- Como: gravar só com a página (sem o app desktop), pegar caixas de várias categorias, depois reconstruir os modelos
+  com todas as gravações e rodar o replay deixando cada gravação de fora (comandos no README, seção
+  Desenvolvimento, e no adendo da spec `specs/2026-11-02-v0.2-labels-design.md`). Critério: zero categorias erradas.
+- [ ] Gabarito sem o app desktop: até a v0.2.2, a categoria certa de cada pegada vinha do log do app
+  (`ABI_APP_LOG`). Nas gravações novas, a categoria tem de sair dos próprios quadros: recortar o rótulo de cada caixa
+  pega, conferir o texto na imagem e gravar o gabarito junto da gravação, para o construtor de modelos e o replay
+  lerem de lá.
 - Atualizar o README ("Limitações da v0.2") com a lista real de categorias sem modelo.
 
 ## 3. v0.2.1 (publicada em 03/11)
@@ -70,24 +75,32 @@ Purchase ativa; caixa lida errada no arrasto ou sob tooltip volta com a categori
   - [x] Imagem do item só com um candidato; candidatos de raridades diferentes deixam a caixa cortada na diagonal
     (maior raridade em cima à esquerda, menor embaixo à direita).
   - [x] Exemplo em produção: botão "Ver exemplo" e link `?preview` (vendedor da 220143 com pegadas de mentira).
-  - [ ] Itens raros com o mesmo som, tamanho e categoria de um comum só aparecem como chance pequena: separar pelo
-    preço do tooltip (v0.3).
+  - Itens raros com o mesmo som, tamanho e categoria de um comum só aparecem como chance pequena. O preço não
+    separa esses: Gungnir, Metal Heart, EEG, Phaethon's Clock e Real Matrix estão todos no pool de 70.000 da Mystery
+    Cargo.
 
 - Atribuição no pega e devolve rápido: na gravação 185459 ainda saem 6 caixas erradas (critério da v0.1).
 - Área vermelha da caixa levantada (quando o jogador pega) como confirmação da atribuição.
 - Botão de diagnóstico local.
 - `getImageData` de cerca de 4 MB por quadro no worker de visão (a metade direita, desde a v0.2.2).
 - v0.3: preço do tooltip e rótulos em português (o autor troca o idioma do jogo para os testes locais).
-- Levar ao app desktop (abi-ear) as correções feitas na web: caixas cortadas com largura impossível (v0.1.1),
-  rolagem ambígua não decidida pelo menor deslocamento (`estimateRowShift`, v0.2), aba Purchase, categoria guardada
-  da caixa que some e itens sem girar (`fits`, v0.2.1).
-- Zip portátil do app desktop para compartilhar (despriorizado: a web vem primeiro).
+  - O preço da caixa diz de qual pool ela saiu: em 50 das 110 combinações de perfil e categoria há mais de um preço,
+    com raridades bem diferentes (Mystery Cargo: 0% de vermelho a 40.000, 0,1% a 70.000, 4% a 250.000). Hoje a página
+    mistura os pools pelo peso. O motor já filtra por preço (`rank(..., price, ...)`, e ignora um preço sem pool); falta
+    ler os dígitos no tooltip que `findOverlays` já acha.
+  - Gravações para isso: mouse parado sobre cada caixa antes de pegar, caixas da mesma categoria com preços
+    diferentes.
+
+- [x] Base 1.0.0.151.17 (27/10) do abi-tracker, que substitui o abibuilder.com como fonte (`scripts/sync-tracker.mjs`).
+  A extração reproduz a base antiga campo a campo; o que mudou é do jogo: pesos dos itens em 42 dos 82 grupos (158
+  dos 242 pools), o Double-Neck Lute fora de um pool da Mystery Cargo de 70.000, e os perfis sem mapa 6 e 9 (com 68
+  pools) fora da base. Itens, tamanhos, sons, categorias, preços das caixas e imagens não mudaram.
 
 ## 6. Como trabalhar
 
 - Delegar a outros agentes (Codex, Antigravity) só funciona numa sessão aberta pelo Houston: confira
   `echo $HOUSTON_SESSION`. A sessão de 02–03/11 rodava como job em segundo plano do Claude Code, sem isso.
 - Cada merge na `master` publica o site. Publicar cedo e calibrar em versões seguintes, com os riscos no README.
-- Referências locais: gravações em `C:\Users\<usuário>\abi-ear-spike\2026-11-02-1433\` e log do app desktop em
-  `C:\Users\<usuário>\AppData\Roaming\abi-ear\abi-ear.log`. Os fixtures de teste (`tests/fixtures/`) saem de
-  `abi-ear/tools/export_golden.py`.
+- Referências locais: gravações em `C:\Users\<usuário>\abi-ear-spike\2026-11-02-1433\`; o log do app desktop das
+  gravações até 03/11 fica em `C:\Users\<usuário>\AppData\Roaming\abi-ear\abi-ear.log`. Os fixtures de teste
+  (`tests/fixtures/`) foram exportados uma vez de `abi-ear/tools/export_golden.py` e não mudam mais.
