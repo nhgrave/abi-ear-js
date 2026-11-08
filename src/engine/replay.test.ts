@@ -4,9 +4,11 @@
  * ABI_REPLAY=<pasta da gravação> [ABI_APP_LOG=<abi-ear.log>] npx vitest run src/engine/replay.test.ts
  * Opcional: ABI_REPLAY_STRICT=0 só imprime a tabela, sem exigir o critério (gravações de pega e devolve);
  * ABI_REPLAY_OUT=<arquivo> grava a tabela (o vitest esconde o console de testes que passam);
- * ABI_LABEL_MODELS=<arquivo> lê os rótulos com esses modelos e conta a categoria de cada pegada do log que tem uma;
+ * ABI_LABEL_MODELS=<arquivos, separados por vírgula> lê os rótulos com esses modelos juntos e conta a categoria de cada pegada do log que tem uma;
  * ABI_REPLAY_FRAME_MS=<ms> intervalo mínimo entre quadros analisados (padrão 100, como a página ao vivo; 0 usa todos);
- * ABI_REPLAY_WINDOW=<de>,<até> janela da atribuição em ms antes do som (padrão a de attribution.ts), para comparar.
+ * ABI_REPLAY_WINDOW=<de>,<até> janela da atribuição em ms antes do som (padrão a de attribution.ts), para comparar;
+ * ABI_REPLAY_SNAPSHOTS=<t1>,<t2>... grava no resumo o grid da página (caixas, categoria, pegadas) no primeiro quadro
+ * analisado depois de cada instante (ms da época, como os nomes dos quadros).
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -20,6 +22,7 @@ import { Dataset } from './data/dataset'
 import { FramePipeline } from './pipeline'
 import { rgbaToGray } from './vision/image'
 import type { LabelModels } from './vision/label-reader'
+import { mergeLabelModels } from '../live/label-data'
 import { fixturePath, readF32, readJson } from '../test-utils/fixtures'
 import { parseAppPicks, type AppPick } from '../test-utils/app-log'
 
@@ -86,7 +89,7 @@ describe.skipIf(!DIR)('replay of a real recording', () => {
     const listener = new Listener(matcher)
     const controller = new Controller(ds)
     controller.setProfile('auto') // o padrão da página
-    const pipeline = new FramePipeline(MODELS ? readJson<LabelModels>(MODELS) : null)
+    const pipeline = new FramePipeline(MODELS ? mergeLabelModels(MODELS.split(',').map((f) => readJson<LabelModels>(f))) : null)
     const picks = (LOG ? parseAppPicks(readFileSync(LOG, 'latin1')) : []).filter((p) => p.t >= frames[0].t && p.t <= frames[frames.length - 1].t)
     const counts: Record<string, number> = {}
     const wrong: string[] = []
@@ -162,6 +165,22 @@ describe.skipIf(!DIR)('replay of a real recording', () => {
       wrong.push(`${new Date(p.t).toISOString()} app ${p.key} ${p.size} em (${p.x}, ${p.y}); nós (${ours?.col}, ${ours?.row}) ${ours?.w}x${ours?.h}`)
     }
 
+    // o grid como a página mostraria, nos instantes pedidos
+    const snapAt = (process.env.ABI_REPLAY_SNAPSHOTS ?? '').split(',').filter(Boolean).map(Number).sort((a, b) => a - b)
+    const snapshots: string[] = []
+    const snapshot = (t: number) => {
+      while (snapAt.length && t >= snapAt[0]) {
+        snapAt.shift()
+        const v = controller.view()
+        snapshots.push(
+          `grid em ${new Date(t).toISOString()} (quadro ${t}, linha do topo da tela ${v.rowOffset}):\n` +
+            v.boxes
+              .map((b) => `  (${b.col}, ${b.row}) ${b.w}x${b.h} ${b.label ?? 'sem categoria'}${b.picks ? ` pegas ${b.picks}` : ''}`)
+              .join('\n'),
+        )
+      }
+    }
+
     // quadros e blocos de áudio em ordem de tempo, como chegariam ao vivo
     let fi = 0
     let lastFrameT = -Infinity
@@ -179,6 +198,7 @@ describe.skipIf(!DIR)('replay of a real recording', () => {
         const r = pipeline.process(gray, frames[fi].t, controller.hint(), { w: img.width, h: img.height, data: img.data })
         if (r.labelMs !== undefined) labelMs.push(r.labelMs)
         controller.onFrame(r)
+        snapshot(frames[fi].t)
         judgeLabels(frames[fi].t)
         fi++
       }
@@ -201,7 +221,7 @@ describe.skipIf(!DIR)('replay of a real recording', () => {
     const appSummary = LOG
       ? `${picks.length} pegadas do app, ${heard} com som, ${heardTotal} pegadas ouvidas\n${JSON.stringify(counts)}\n${wrong.join('\n')}\n`
       : `sem log do app; ${heardTotal} pegadas ouvidas\n`
-    const summary = `${DIR}\n${appSummary}${liveSummary}${labelSummary}`
+    const summary = `${DIR}\n${appSummary}${liveSummary}${labelSummary}${snapshots.map((x) => `${x}\n`).join("")}`
     console.log(summary)
     if (process.env.ABI_REPLAY_OUT) writeFileSync(process.env.ABI_REPLAY_OUT, summary)
     if (STRICT && LOG) {
