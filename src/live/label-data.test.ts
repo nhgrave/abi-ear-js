@@ -71,6 +71,10 @@ describe('mergeLabelModels', () => {
   it('keeps the minimum score of each file on its own models', () => {
     expect(mergeLabelModels([VALID, { ...PT, minScore: 0.9 }])!.models).toEqual([...VALID.models, { ...PT.models[0], minScore: 0.9 }])
   })
+  it('keeps the margin of each file on its own models (the Portuguese file asks less: "Carga Misteriosa Rara")', () => {
+    expect(mergeLabelModels([VALID, { ...PT, minScore: 0.9, margin: 0.08 }])!.models).toEqual([...VALID.models, { ...PT.models[0], minScore: 0.9, margin: 0.08 }])
+    expect(mergeLabelModels([VALID, { ...PT, margin: 0.08 }])!.models).toEqual([...VALID.models, { ...PT.models[0], margin: 0.08 }])
+  })
   it('leaves out a file made with another text level, whose masks would not compare', () => {
     expect(mergeLabelModels([VALID, { ...PT, textLevel: 90 }])).toEqual(VALID)
   })

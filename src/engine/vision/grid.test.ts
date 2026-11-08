@@ -150,6 +150,39 @@ describe('empty cell with the character showing through', () => {
   })
 })
 
+describe('box whose quality the game revealed', () => {
+  // gravação 2026-11-08-155416: "Qualidade de 2 carga(s) misteriosa(s) revelada para você" pinta o fundo da caixa
+  // com a cor da raridade (roxo, cinza ~21) e a divisória entre as células dela aparece fraca por cima (~37–44); a
+  // borda da caixa fica clara (~135) e as bordas comuns entre caixas, ~60–67
+  const geom: GridGeometry = { x0: 10, y0: 10, pitch: 64, cols: 2, rows: 2 }
+  const frame = () => {
+    const w = 160
+    const h = 160
+    const data = new Uint8Array(w * h).fill(3)
+    const fill = (x: number, y: number, fw: number, fh: number, v: number) => {
+      for (let yy = y; yy < y + fh; yy++) for (let xx = x; xx < x + fw; xx++) data[yy * w + xx] = v
+    }
+    fill(11, 11, 63, 127, 21) // caixa 1x2 em (0,0), fundo roxo
+    fill(30, 60, 26, 30, 39) // ícone do baú, no meio da caixa, sobre a divisória
+    fill(11, 74, 63, 1, 44) // divisória interna aparecendo pelo fundo
+    for (let x = 14; x < 50; x += 3) fill(x, 14, 2, 9, 200) // rótulo
+    fill(75, 11, 63, 127, 20) // caixa 1x2 comum em (1,0)
+    for (let x = 78; x < 114; x += 3) fill(x, 14, 2, 9, 200)
+    fill(10, 10, 129, 1, 62) // bordas comuns
+    fill(10, 138, 129, 1, 62)
+    fill(138, 10, 1, 129, 62)
+    fill(10, 10, 1, 129, 135) // borda clara da revelada
+    fill(74, 10, 1, 129, 135)
+    fill(10, 10, 65, 1, 135)
+    fill(10, 138, 65, 1, 135)
+    return { w, h, data }
+  }
+
+  it('is one box, not split at the faint cell line inside it', () => {
+    expect(extractBoxes(frame(), geom).boxes.map((b) => [b.col, b.row, b.w, b.h])).toEqual([[0, 0, 1, 2], [1, 0, 1, 2]])
+  })
+})
+
 describe('morphological opening by runs', () => {
   // definição direta (cv2.morphologyEx MORPH_OPEN, retângulo 1×n, âncora n//2, borda que não conta)
   const naive = (src: Uint8Array, w: number, h: number, n: number, horizontal: boolean): Uint8Array => {

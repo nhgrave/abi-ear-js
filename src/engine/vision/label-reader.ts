@@ -14,7 +14,7 @@ const SHIFT = 2 // px canônicos de folga na posição (grid achado com 1–2 px
 const TEXT_MIN_FRACTION = 0.01 // fração da faixa acima do nível de texto para dizer que há texto
 
 // mask: base64 de Uint8Array (0..255); minScore: nota mínima própria (a do arquivo do idioma, quando difere da geral)
-export type LabelModel = { label: string; w: number; mask: string; minScore?: number }
+export type LabelModel = { label: string; w: number; mask: string; minScore?: number; margin?: number }
 export type LabelModels = { version: 1; textLevel: number; minScore: number; margin: number; models: LabelModel[] }
 
 /** Altura da faixa do rótulo em px canônicos: o 1x1 vai até 4 linhas (a célula inteira); de 2 de largura em
@@ -53,8 +53,40 @@ export function textMask(gray: Gray, geom: GridGeometry, box: BoxRect, textLevel
   return out
 }
 
-/** Modelo de um par (categoria, largura): a média das máscaras das amostras. */
-export function buildModel(label: string, w: number, masks: Float32Array[]): LabelModel {
+/** A máscara deslocada (dx, dy) px; o que entra pela borda fica vazio. */
+function shifted(m: Float32Array, W: number, dx: number, dy: number): Float32Array {
+  const H = m.length / W
+  const out = new Float32Array(m.length)
+  for (let y = 0; y < H; y++) {
+    const sy = y - dy
+    if (sy < 0 || sy >= H) continue
+    for (let x = 0; x < W; x++) {
+      const sx = x - dx
+      if (sx >= 0 && sx < W) out[y * W + x] = m[sy * W + sx]
+    }
+  }
+  return out
+}
+
+/** A amostra alinhada à de referência: o deslocamento de até ±SHIFT px que mais sobrepõe o texto das duas (o grid
+ * de cada quadro sai com 1–2 px de erro; sem alinhar, a média borra e a própria categoria perde nota). */
+function aligned(ref: Float32Array, m: Float32Array, W: number): Float32Array {
+  let best = { dx: 0, dy: 0, overlap: -1 }
+  for (let dy = -SHIFT; dy <= SHIFT; dy++) {
+    for (let dx = -SHIFT; dx <= SHIFT; dx++) {
+      const s = shifted(m, W, dx, dy)
+      let overlap = 0
+      for (let i = 0; i < s.length; i++) overlap += s[i] * ref[i]
+      if (overlap > best.overlap || (overlap === best.overlap && Math.abs(dx) + Math.abs(dy) < Math.abs(best.dx) + Math.abs(best.dy))) best = { dx, dy, overlap }
+    }
+  }
+  return best.dx === 0 && best.dy === 0 ? m : shifted(m, W, best.dx, best.dy)
+}
+
+/** Modelo de um par (categoria, largura): a média das máscaras das amostras, alinhadas à primeira. */
+export function buildModel(label: string, w: number, samples: Float32Array[]): LabelModel {
+  const W = maskSize(w)[0]
+  const masks = samples.map((m) => aligned(samples[0], m, W))
   const n = masks[0].length
   const bytes = new Uint8Array(n)
   for (let i = 0; i < n; i++) {
@@ -114,14 +146,14 @@ function score(ones: Int32Array, nOnes: number, W: number, H: number, tpl: Templ
   return best
 }
 
-type LabelScore = { s: number; min: number } // melhor nota da categoria e a nota mínima do modelo que a deu
+type LabelScore = { s: number; min: number; margin: number } // melhor nota da categoria; nota mínima e folga do modelo que a deu
 
 function scoresOf(ones: Int32Array, n: number, W: number, H: number, w: number, models: LabelModels): Map<string, LabelScore> {
   const byLabel = new Map<string, LabelScore>()
   for (const m of models.models) {
     if (m.w !== w) continue
     const s = score(ones, n, W, H, template(m))
-    if (s > (byLabel.get(m.label)?.s ?? -Infinity)) byLabel.set(m.label, { s, min: m.minScore ?? models.minScore })
+    if (s > (byLabel.get(m.label)?.s ?? -Infinity)) byLabel.set(m.label, { s, min: m.minScore ?? models.minScore, margin: m.margin ?? models.margin })
   }
   return byLabel
 }
@@ -168,15 +200,15 @@ export function readLabels(
       // melhor nota de cada categoria: com modelos de dois idiomas, a margem vale contra a melhor das outras
       // categorias, e não contra o outro modelo da mesma
       const byLabel = scoresOf(ones, n, W, H, box.w, models)
-      let best = { label: '', s: -Infinity, min: models.minScore }
+      let best = { label: '', s: -Infinity, min: models.minScore, margin: models.margin }
       let second = -Infinity
-      for (const [l, { s, min }] of byLabel) {
+      for (const [l, { s, min, margin }] of byLabel) {
         if (s > best.s) {
           second = Math.max(second, best.s)
-          best = { label: l, s, min }
+          best = { label: l, s, min, margin }
         } else if (s > second) second = s
       }
-      if (best.s >= best.min && best.s - Math.max(second, 0) >= models.margin) label = best.label
+      if (best.s >= best.min && best.s - Math.max(second, 0) >= best.margin) label = best.label
     }
     out.push({ col: box.col, row: box.row, w: box.w, h: box.h, label, hasText })
   }

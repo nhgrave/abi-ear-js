@@ -26,19 +26,22 @@ function isLabelModels(v: unknown): v is LabelModels {
   )
 }
 
-/** Junta os arquivos de modelos: os limiares do primeiro e os modelos de todos, cada um com a nota mínima do seu. Um arquivo feito com outro nível de
- * texto fica de fora (as máscaras não seriam comparáveis). */
+/** Junta os arquivos de modelos: os limiares do primeiro e os modelos de todos, cada um com a nota mínima e a folga do
+ * seu arquivo. Um arquivo feito com outro nível de texto fica de fora (as máscaras não seriam comparáveis). */
 export function mergeLabelModels(files: LabelModels[]): LabelModels | null {
   if (files.length === 0) return null
   const [first] = files
   const same = files.filter((f) => f.textLevel === first.textLevel)
   if (same.length < files.length) console.warn('abi-ear: modelos de rótulo com outro nível de texto ficaram de fora')
-  // cada arquivo leva a sua nota mínima nos seus modelos (os nomes em português começam iguais: "Colecionáveis" e
-  // "Colecionáveis Incomuns" pedem nota alta)
-  return {
-    ...first,
-    models: same.flatMap((f) => (f.minScore === first.minScore ? f.models : f.models.map((m) => ({ ...m, minScore: m.minScore ?? f.minScore })))),
-  }
+  // cada arquivo leva a sua nota mínima e a sua folga nos seus modelos: os nomes em português começam iguais
+  // ("Colecionáveis" e "Colecionáveis Incomuns" pedem nota alta; "Carga Misteriosa" e "Carga Misteriosa Rara" diferem
+  // só por uma palavra curta, e a folga entre as duas fica em ~0,12)
+  const own = (f: LabelModels, m: LabelModel): LabelModel => ({
+    ...m,
+    ...(f.minScore !== first.minScore && { minScore: m.minScore ?? f.minScore }),
+    ...(f.margin !== first.margin && { margin: m.margin ?? f.margin }),
+  })
+  return { ...first, models: same.flatMap((f) => f.models.map((m) => own(f, m))) }
 }
 
 async function loadOne(url: string, fetchFn: typeof fetch): Promise<LabelModels | null> {
