@@ -7,10 +7,11 @@ import { cellAt, cellKey, cellOrigin, pyRound, type BoxRect, type GridGeometry, 
 
 export * from './types'
 
-export const BRIGHT = 40 // bordas de caixa: cinza acima disso = linha/texto; fundo das caixas fica em ~10-30
+export const BRIGHT = 50 // bordas de caixa: cinza acima disso = linha/texto; fundo das caixas fica em ~10-30, as bordas
+// entre caixas em ~60-67; a divisória entre as células de uma caixa de qualidade revelada aparece fraca (~37-44)
 export const LINE_MIN = 25 // reticulado: cinza mínimo de uma linha
 // reticulado: quanto a linha é mais clara que o fundo ao lado. Divisória entre células vazias ~40 sobre ~3
-// (no limite de BRIGHT), borda de caixa ~67 sobre ~18; linhas internas apagadas de uma caixa (~22 sobre ~18)
+// (abaixo de BRIGHT: entre células vazias não é borda de caixa), borda de caixa ~67 sobre ~18; linhas internas apagadas de uma caixa (~22 sobre ~18)
 // não contam
 export const LINE_CONTRAST = 15
 export const MIN_PITCH = 20

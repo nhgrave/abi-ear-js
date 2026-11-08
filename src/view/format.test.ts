@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { boxDisplay, RARITY_COLORS } from './format'
 import type { BoxView } from '../engine/view'
 
-const box = (over: Partial<BoxView>): BoxView => ({ uid: 1, col: 0, row: 0, w: 2, h: 1, clipped: false, label: null, picks: 0, candidates: [], sizeRelaxed: false, ...over })
+const box = (over: Partial<BoxView>): BoxView => ({ uid: 1, col: 0, row: 0, w: 2, h: 1, clipped: false, label: null, picks: 0, candidates: [], sizeRelaxed: false, revealed: false, ...over })
 const cand = (name: string, pct: number, rarity = 5) => ({ itemId: 1, name, pct, rarity, icon: `data/icons/${name}.png` })
 
 describe('boxDisplay', () => {
@@ -39,6 +39,12 @@ describe('boxDisplay', () => {
   it('keeps a plain border when all candidates share one rarity', () => {
     expect(boxDisplay(box({ picks: 1, candidates: [cand('UPS', 50, 5), cand('Vector', 50, 5)] })).edge).toBeNull()
     expect(boxDisplay(box({ picks: 1, candidates: [cand('PSU', 100, 4)] })).edge).toBeNull()
+  })
+  it('shows the revealed item with its picture before any pickup', () => {
+    // o jogo revelou a caixa (imagem do item dentro dela): o item aparece já, sem precisar pegar
+    expect(boxDisplay(box({ label: 'Tools', revealed: true, candidates: [cand('Portable Jack', 100, 4)] }))).toMatchObject({
+      text: 'Portable Jack', pct: 100, icon: 'data/icons/Portable Jack.png', color: RARITY_COLORS[4], hint: false,
+    })
   })
   it('shows ? when a picked box has no candidates', () => {
     expect(boxDisplay(box({ picks: 1 }))).toEqual({ text: '?', pct: null, count: 0, color: null, edge: null, icon: null, hint: false })

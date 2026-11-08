@@ -5,6 +5,7 @@ import { scan } from './vision/grid'
 import type { GridGeometry, GridScan } from './vision/types'
 import { readLabels, type LabelModels } from './vision/label-reader'
 import { vendorTab, type Rgba, type VendorTab } from './vision/vendor-tab'
+import { revealedBoxes, type RevealedBox } from './vision/revealed'
 
 export const SCAN_INTERVAL_MS = 350 // o mesmo intervalo de varredura do app desktop
 
@@ -21,6 +22,8 @@ export type FrameResult = {
   labelMs?: number // tempo da leitura dos rótulos neste quadro (medido no replay)
   /** Aba ativa do vendedor acima do grid achado; undefined sem varredura, sem grid ou sem o quadro em cores. */
   tab?: VendorTab
+  /** Caixas que o jogo revelou (fundo da raridade e imagem do item), com a aba Purchase ativa; ausente sem nenhuma. */
+  revealed?: RevealedBox[]
 }
 
 /** O vendedor fica na metade direita da tela: sem OCR, é o que separa o grid dele do inventário. */
@@ -42,11 +45,13 @@ export class FramePipeline {
     let labels: LabelReading[] = []
     let labelMs: number | undefined
     let tab: VendorTab | undefined
+    let revealed: RevealedBox[] = []
     if (this.lastScanT === null || t - this.lastScanT >= SCAN_INTERVAL_MS) {
       found = scanVendor(gray, hint)
       this.lastScanT = t
       this.lastGrid = found ? found.geometry : null
       if (found && rgba) tab = vendorTab(rgba, found.geometry)
+      if (found && rgba && tab === 'purchase') revealed = revealedBoxes(rgba, found.geometry, found.boxes)
       if (found && this.models) {
         const t0 = performance.now()
         labels = readLabels(gray, found.geometry, found.boxes, this.models)
@@ -55,6 +60,6 @@ export class FramePipeline {
     }
     const cursor = this.cursor.find(gray, t, this.lastGrid ?? hint)
     // média só da metade direita, a que o worker lê (e onde fica o vendedor)
-    return { t, cursor, scan: found, mean: meanGray(gray, Math.floor(gray.w / 2)), labels, ...(labelMs !== undefined && { labelMs }), ...(tab !== undefined && { tab }) }
+    return { t, cursor, scan: found, mean: meanGray(gray, Math.floor(gray.w / 2)), labels, ...(labelMs !== undefined && { labelMs }), ...(tab !== undefined && { tab }), ...(revealed.length > 0 && { revealed }) }
   }
 }

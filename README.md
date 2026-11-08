@@ -32,6 +32,9 @@ https://nhgrave.github.io/abi-ear-js/?preview. O exemplo é um vendedor de verda
 - **Mapa:** no "Automático (pelos rótulos)", as categorias vistas no vendedor dizem a família de mapas. O seletor
   continua lá para escolher o mapa e o modo à mão.
 - **Itens:** o tamanho da caixa, a categoria e o som filtram a base do Merchant, ponderada pelos pools dos mapas.
+- **Caixas reveladas:** quando o jogo revela o conteúdo de caixas do vendedor (fundo da cor da raridade e a imagem do
+  item), a página compara a imagem com os ícones dos itens que cabem na caixa e mostra o item com 100%, sem precisar
+  pegar.
 
 ## Requisitos
 
@@ -44,8 +47,8 @@ https://nhgrave.github.io/abi-ear-js/?preview. O exemplo é um vendedor de verda
 
 ## Limitações
 
-- Lê o jogo em **inglês** e em **português**. Em português ainda faltam Eletrônicos, Colecionáveis Incomuns, Itens
-  Militares de 2 de largura, Carga Misteriosa Rara e Suprimentos Médicos Raros (ficam sem categoria). Em outro idioma, a página funciona sem categoria, e o mapa e o
+- Lê o jogo em **inglês** e em **português**. Em português ainda faltam Colecionáveis Incomuns, Itens Militares de 2
+  de largura e Suprimentos Médicos Raros (ficam sem categoria). Em outro idioma, a página funciona sem categoria, e o mapa e o
   modo são escolhidos à mão (ou "Todos os mapas").
 - Os modelos de algumas categorias saíram de poucas amostras: Medical Supplies, Military Items e Uncommon Mystery
   Cargo de 1 e de 3 de largura, Uncommon Military Items, Rare Mystery Cargo e Paper. Ainda sem modelo (ficam sem

@@ -88,6 +88,13 @@ describe('label reader', () => {
     expect(readLabels(gray, geom, [BOX], strict)[0]).toMatchObject({ label: null, hasText: true })
   })
 
+  it('a model can ask a smaller margin than its file ("Carga Misteriosa" is the start of "Carga Misteriosa Rara")', () => {
+    const { gray, geom } = draw(64, BOX, 1)
+    const close = (margin: number | undefined): LabelModels => ({ ...M, margin: 1.5, models: M.models.map((m) => ({ ...m, ...(margin !== undefined && { margin }) })) })
+    expect(readLabels(gray, geom, [BOX], close(undefined))[0].label).toBeNull()
+    expect(readLabels(gray, geom, [BOX], close(0.08))[0].label).toBe('Energy Items')
+  })
+
   it('unknown_text_has_text_but_no_label', () => {
     const { gray, geom } = draw(64, BOX, 99)
     expect(readLabels(gray, geom, [BOX], M)[0]).toMatchObject({ label: null, hasText: true })
@@ -110,6 +117,14 @@ describe('label reader', () => {
       const { gray, geom } = draw(64, BOX, 1)
       expect(readLabels(gray, { ...geom, x0: geom.x0 + dx, y0: geom.y0 - dx }, [BOX], M)[0].label).toBe('Energy Items')
     }
+  })
+
+  it('a model built from samples one pixel apart reads as well as from one sample (2026-11-08-155416, Rare Mystery Cargo)', () => {
+    const { gray, geom } = draw(64, BOX, 1)
+    const sample = (dx: number, dy: number) => textMask(gray, { ...geom, x0: geom.x0 + dx, y0: geom.y0 + dy }, BOX, TEXT_LEVEL)
+    const two: LabelModels = { ...M, models: [buildModel('Energy Items', 2, [sample(0, 0), sample(1, 1)]), M.models[1]] }
+    const shot = draw(64, BOX, 1)
+    expect(readLabels(shot.gray, shot.geom, [BOX], { ...two, minScore: 0.95 })[0].label).toBe('Energy Items')
   })
 
   it('arrow_over_the_label_reads_right_or_nothing', () => {

@@ -29,6 +29,7 @@ export type TrackedBoxInit = {
   ranking?: Ranking | null
   seenAt?: number
   stale?: boolean
+  revealedItem?: number | null
 }
 
 export class TrackedBox {
@@ -39,6 +40,7 @@ export class TrackedBox {
   uid: number // identidade que acompanha a caixa movida
   seenAt: number // último scan em que apareceu
   stale: boolean // fora da vista quando o estoque se reorganizou: a posição pode ter mudado
+  revealedItem: number | null // item que o jogo revelou na caixa (imagem dentro dela), ou null
 
   constructor(
     public col: number,
@@ -55,6 +57,7 @@ export class TrackedBox {
     this.uid = nextUid++
     this.seenAt = init.seenAt ?? 0
     this.stale = init.stale ?? false
+    this.revealedItem = init.revealedItem ?? null
   }
 
   get key(): string {
@@ -70,9 +73,10 @@ export class TrackedBox {
     return new Set(boxCells(this).map(([c, r]) => cellKey(c, r)))
   }
 
-  /** Algo que vale guardar se a caixa sumir: pegadas ou a categoria já lida (que leva duas leituras para voltar). */
+  /** Algo que vale guardar se a caixa sumir: pegadas, a categoria já lida (que leva duas leituras para voltar) ou o
+   * item revelado. */
   get hasData(): boolean {
-    return this.picks > 0 || this.label !== null
+    return this.picks > 0 || this.label !== null || this.revealedItem !== null
   }
 
   addHits(hits: readonly SoundHit[]): void {
@@ -99,6 +103,7 @@ export class TrackedBox {
     this.picks = other.picks
     this.ranking = other.ranking
     this.uid = other.uid
+    this.revealedItem = this.revealedItem ?? other.revealedItem
   }
 }
 

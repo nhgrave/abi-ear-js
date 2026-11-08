@@ -19,7 +19,8 @@ const color = (rarity: number) => RARITY_COLORS[rarity] ?? UNKNOWN_RARITY
 
 export function boxDisplay(b: BoxView): BoxDisplay {
   // o tamanho já está no desenho do grid; antes de pegar, a categoria lida é o que diz mais
-  if (b.picks === 0) return { text: b.label ?? '', pct: null, count: 0, color: null, edge: null, icon: null, hint: true }
+  // a caixa revelada pelo jogo já tem o item: aparece como uma caixa pega
+  if (b.picks === 0 && !b.revealed) return { text: b.label ?? '', pct: null, count: 0, color: null, edge: null, icon: null, hint: true }
   const top = b.candidates[0]
   if (!top) return { text: '?', pct: null, count: 0, color: null, edge: null, icon: null, hint: false }
   const rarities = b.candidates.map((c) => c.rarity)
