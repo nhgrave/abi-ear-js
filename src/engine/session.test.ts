@@ -339,6 +339,60 @@ it('two boxes read as one keep their identity while merged', () => {
   expect(s.boxAtScreen(6 * 64 + 10, 2 * 64 + 10)!.uid).toBe(u2)
 })
 
+it('box read wider under a tooltip that spills over empty cells keeps its size', () => {
+  // gravação 2026-11-07-114326: o tooltip de uma caixa 2x2 na beira direita cobre a coluna vazia ao lado, e a visão
+  // leu uma caixa 3x2; a pegada não pode cair numa caixa do tamanho errado
+  const s = new VendorSession()
+  s.applyScan(makeScan(LAYOUT), LABELS, 0)
+  const uid = get(s, '6,2').uid
+  s.applyScan(makeScan([A, B, C, D, box(6, 2, 3, 3)], [[8, 5]]), NONE, 500) // o resto do tooltip: células incertas
+  expect(get(s, '6,2')).toMatchObject({ uid, w: 2, h: 3, label: 'Tools' })
+  expect(s.boxAtScreen(6 * 64 + 10, 2 * 64 + 10)!.uid).toBe(uid)
+})
+
+it('box read wider over empty cells keeps its size when the tooltip text shows in it, even in a clean read', () => {
+  // gravação 2026-11-07-160851: o tooltip não foi achado e a leitura veio sem células incertas, mas o texto dele
+  // aparece abaixo do rótulo da caixa lida (lit)
+  const s = new VendorSession()
+  s.applyScan(makeScan(LAYOUT), LABELS, 0)
+  const uid = get(s, '6,2').uid
+  s.applyScan(makeScan([A, B, C, D, { ...box(6, 2, 3, 3), lit: true }]), NONE, 500)
+  expect(get(s, '6,2')).toMatchObject({ uid, w: 2, h: 3 })
+})
+
+it('box partly below the view whose visible part is empty is removed', () => {
+  // gravação 2026-11-07-192442: depois da compra, o vendedor levou para cima a caixa que estava na beira de baixo; o
+  // lugar ficou vazio, mas a última linha dela não aparecia e a página nunca a conferia
+  const s = new VendorSession()
+  s.applyScan(makeScan(LAYOUT), LABELS, 0)
+  const low = new TrackedBox(0, 5, 2, 2, false, { label: 'Mystery Cargo', seenAt: 0 }) // a linha 6 fica fora da tela
+  s.boxes.set(low.key, low)
+  s.applyScan(makeScan(LAYOUT), NONE, 500)
+  expect(s.boxes.has('0,5')).toBe(true) // pode estar sendo arrastada: espera um pouco
+  s.applyScan(makeScan(LAYOUT), NONE, 3000)
+  expect(s.boxes.has('0,5')).toBe(false)
+})
+
+it('box partly below the view that is still there, read cut at the edge, is kept', () => {
+  const s = new VendorSession()
+  s.applyScan(makeScan(LAYOUT), LABELS, 0)
+  const low = new TrackedBox(0, 5, 2, 2, false, { label: 'Mystery Cargo', seenAt: 0 })
+  s.boxes.set(low.key, low)
+  s.applyScan(makeScan([...LAYOUT, box(0, 5, 2, 1, true)]), NONE, 3000)
+  expect(s.boxes.get('0,5')).toMatchObject({ w: 2, h: 2, label: 'Mystery Cargo' })
+})
+
+it('cursor on the cut row below the grid finds the box cut at the bottom edge', () => {
+  // gravação 2026-11-07-214528: as caixas 3x2 da beira de baixo aparecem pela metade; o jogador clicou na parte
+  // cortada (o tooltip do jogo mostrava a caixa) e a pegada ficava sem caixa
+  const s = new VendorSession()
+  s.applyScan(makeScan([...LAYOUT, box(0, 5, 3, 1, true)]), LABELS, 0)
+  const cut = get(s, '0,5')
+  expect(s.boxAtScreen(64 + 10, 6 * 64 + 20)).toBe(cut) // linha 6: abaixo das 6 linhas inteiras
+  expect(s.boxAtScreen(64 + 10, 7 * 64 + 20)).toBeNull() // longe da beira
+  expect(s.boxAtScreen(4 * 64 + 10, 6 * 64 + 20)).toBeNull() // nenhuma caixa cortada nessa coluna
+})
+
 it('smaller box that stays for long is accepted', () => {
   // a caixa guardada estava errada (lida grande demais): uma leitura que se mantém por muito tempo vale
   const s = new VendorSession()

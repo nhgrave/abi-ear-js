@@ -509,6 +509,43 @@ function innerIsEmpty(gray: Gray, geom: GridGeometry, col: number, row: number, 
   return rows[1] <= rows[0] || cols[1] <= cols[0] || std(gray, rows, cols) < EMPTY_STD
 }
 
+// rótulo da caixa: texto claro (~195) no alto, à esquerda. O fundo das células vazias é transparente e deixa ver o
+// personagem atrás do painel (até ~62), mas nunca tão claro
+const LABEL_TEXT_LEVEL = 110
+const LABEL_TEXT_MIN_PX = 12 // na célula de 64 px; uma letra pequena já tem mais que isso
+
+/** true se há pixels claros de texto no alto da caixa. `firstLine`: só na primeira linha do rótulo, perto da borda
+ * esquerda, onde toda caixa do vendedor começa o seu; senão, em toda a faixa do rótulo (até ~2 linhas). */
+function hasLabelText(gray: Gray, geom: GridGeometry, col: number, row: number, wCells: number, firstLine: boolean): boolean {
+  const [xa, ya] = cellOrigin(geom, col, row)
+  const p = geom.pitch
+  const [y0, y1] = pySlice(Math.ceil(ya + 2), Math.trunc(ya + (firstLine ? 0.3 : 0.55) * p), gray.h)
+  const [x0, x1] = pySlice(Math.ceil(xa + 2), Math.trunc(xa + (firstLine ? 0.75 * p : wCells * p - 2)), gray.w)
+  const need = LABEL_TEXT_MIN_PX * (p / 64) ** 2
+  let n = 0
+  for (let y = y0; y < y1; y++) {
+    const base = y * gray.w
+    for (let x = x0; x < x1; x++) if (gray.data[base + x] >= LABEL_TEXT_LEVEL && ++n >= need) return true
+  }
+  return false
+}
+
+/** true se há pixels claros abaixo da faixa do rótulo: o texto de um tooltip por cima ou a imagem do item revelado.
+ * Numa caixa comum ali só há o ícone do baú (~44). */
+function litBelowLabel(gray: Gray, geom: GridGeometry, box: BoxRect): boolean {
+  const [xa, ya] = cellOrigin(geom, box.col, box.row)
+  const p = geom.pitch
+  const [y0, y1] = pySlice(Math.ceil(ya + 0.6 * p), Math.trunc(ya + box.h * p) - 3, gray.h)
+  const [x0, x1] = pySlice(Math.ceil(xa + 3), Math.trunc(xa + box.w * p) - 3, gray.w)
+  const need = LABEL_TEXT_MIN_PX * (p / 64) ** 2
+  let n = 0
+  for (let y = y0; y < y1; y++) {
+    const base = y * gray.w
+    for (let x = x0; x < x1; x++) if (gray.data[base + x] >= LABEL_TEXT_LEVEL && ++n >= need) return true
+  }
+  return false
+}
+
 function cellIsEmpty(gray: Gray, geom: GridGeometry, col: number, row: number): boolean {
   return innerIsEmpty(gray, geom, col, row, 1, 1)
 }
@@ -593,8 +630,17 @@ export function extractBoxes(gray: Gray, geom: GridGeometry): GridScan {
       return true
     }
     const topOpen = row === 0 && !edges(pyRound(geom.y0))
+    // toda caixa começa o rótulo na primeira linha, à esquerda (a cortada em cima pela rolagem pode tê-lo fora da
+    // tela). Sem texto nenhum no alto é célula vazia, com o personagem aparecendo por trás do painel; com texto em
+    // outro lugar é algo por cima (a dica "R Girar" do arrasto, divisórias apagadas por ela): incerta
+    if (!topOpen && !hasLabelText(gray, geom, col, row, w, true)) {
+      if (hasLabelText(gray, geom, col, row, w, false)) for (const k of keys) uncertain.add(k)
+      continue
+    }
     const bottomOpen = row + h === nr && !edges(pyRound(geom.y0 + nr * p))
-    boxes.push({ col, row, w, h, clipped: topOpen || bottomOpen })
+    const box: BoxRect = { col, row, w, h, clipped: topOpen || bottomOpen }
+    if (litBelowLabel(gray, geom, box)) box.lit = true
+    boxes.push(box)
   }
   boxes.sort((a, b) => a.row - b.row || a.col - b.col)
   return { geometry: geom, boxes, uncertain, overlays }
