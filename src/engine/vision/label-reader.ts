@@ -13,7 +13,8 @@ const MARGIN = 2 // px canônicos fora das linhas do grid
 const SHIFT = 2 // px canônicos de folga na posição (grid achado com 1–2 px de erro)
 const TEXT_MIN_FRACTION = 0.01 // fração da faixa acima do nível de texto para dizer que há texto
 
-export type LabelModel = { label: string; w: number; mask: string } // mask: base64 de Uint8Array (0..255)
+// mask: base64 de Uint8Array (0..255); minScore: nota mínima própria (a do arquivo do idioma, quando difere da geral)
+export type LabelModel = { label: string; w: number; mask: string; minScore?: number }
 export type LabelModels = { version: 1; textLevel: number; minScore: number; margin: number; models: LabelModel[] }
 
 /** Altura da faixa do rótulo em px canônicos: o 1x1 vai até 4 linhas (a célula inteira); de 2 de largura em
@@ -113,6 +114,33 @@ function score(ones: Int32Array, nOnes: number, W: number, H: number, tpl: Templ
   return best
 }
 
+type LabelScore = { s: number; min: number } // melhor nota da categoria e a nota mínima do modelo que a deu
+
+function scoresOf(ones: Int32Array, n: number, W: number, H: number, w: number, models: LabelModels): Map<string, LabelScore> {
+  const byLabel = new Map<string, LabelScore>()
+  for (const m of models.models) {
+    if (m.w !== w) continue
+    const s = score(ones, n, W, H, template(m))
+    if (s > (byLabel.get(m.label)?.s ?? -Infinity)) byLabel.set(m.label, { s, min: m.minScore ?? models.minScore })
+  }
+  return byLabel
+}
+
+/** Nota de cada categoria para o rótulo de uma caixa (diagnóstico e ajuste dos limiares). */
+export function labelScores(gray: Gray, geom: GridGeometry, box: BoxRect, models: LabelModels): Map<string, number> {
+  const [W, H] = maskSize(box.w)
+  const mask = textMask(gray, geom, box, models.textLevel)
+  const ones = new Int32Array(2 * mask.length)
+  let n = 0
+  for (let i = 0; i < mask.length; i++) {
+    if (mask[i] === 0) continue
+    ones[2 * n] = i % W
+    ones[2 * n + 1] = Math.floor(i / W)
+    n++
+  }
+  return new Map([...scoresOf(ones, n, W, H, box.w, models)].map(([l, x]) => [l, x.s]))
+}
+
 /** Rótulo de cada caixa inteira. Todas são lidas em toda varredura, também as que já têm categoria: só a leitura
  * percebe que outra caixa do mesmo tamanho tomou o lugar de uma pega (o estoque do vendedor muda). */
 export function readLabels(
@@ -137,17 +165,18 @@ export function readLabels(
     const hasText = n / mask.length >= TEXT_MIN_FRACTION
     let label: string | null = null
     if (hasText) {
-      let best = { label: '', s: -Infinity }
+      // melhor nota de cada categoria: com modelos de dois idiomas, a margem vale contra a melhor das outras
+      // categorias, e não contra o outro modelo da mesma
+      const byLabel = scoresOf(ones, n, W, H, box.w, models)
+      let best = { label: '', s: -Infinity, min: models.minScore }
       let second = -Infinity
-      for (const m of models.models) {
-        if (m.w !== box.w) continue
-        const s = score(ones, n, W, H, template(m))
+      for (const [l, { s, min }] of byLabel) {
         if (s > best.s) {
           second = Math.max(second, best.s)
-          best = { label: m.label, s }
+          best = { label: l, s, min }
         } else if (s > second) second = s
       }
-      if (best.s >= models.minScore && best.s - Math.max(second, 0) >= models.margin) label = best.label
+      if (best.s >= best.min && best.s - Math.max(second, 0) >= models.margin) label = best.label
     }
     out.push({ col: box.col, row: box.row, w: box.w, h: box.h, label, hasText })
   }

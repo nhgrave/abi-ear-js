@@ -72,6 +72,22 @@ describe('label reader', () => {
     expect(readLabels(gray, geom, [BOX], M)).toEqual([{ col: 0, row: 0, w: 2, h: 2, label: 'Tools', hasText: true }])
   })
 
+  it('two models of the same category (one per game language) do not cancel each other', () => {
+    // o modelo em português e o em inglês de uma categoria pontuam perto um do outro numa leitura parecida: a margem
+    // vale contra a melhor das outras categorias, não contra o outro modelo da mesma
+    const { gray, geom } = draw(MODEL_PITCH, BOX, 2)
+    const twin = buildModel('Tools', 2, [textMask(gray, geom, BOX, TEXT_LEVEL)])
+    const both: LabelModels = { ...M, models: [...M.models, twin] }
+    expect(readLabels(gray, geom, [BOX], both)[0]).toMatchObject({ label: 'Tools' })
+  })
+
+  it('a model can require a higher score than its file (Portuguese names share the start of the name)', () => {
+    // "Colecionáveis" e "Colecionáveis Incomuns" começam igual: o modelo em português só vale com nota alta
+    const { gray, geom } = draw(64, BOX, 2)
+    const strict: LabelModels = { ...M, models: M.models.map((m) => ({ ...m, minScore: 1.01 })) }
+    expect(readLabels(gray, geom, [BOX], strict)[0]).toMatchObject({ label: null, hasText: true })
+  })
+
   it('unknown_text_has_text_but_no_label', () => {
     const { gray, geom } = draw(64, BOX, 99)
     expect(readLabels(gray, geom, [BOX], M)[0]).toMatchObject({ label: null, hasText: true })

@@ -1,6 +1,8 @@
-/** Ferramenta: constrói os modelos de rótulo (forma B) a partir de gravações e do log do app desktop.
+/** Ferramenta: constrói os modelos de rótulo (forma B) a partir de gravações. A categoria certa vem do gabarito
+ * `labels-truth.json` da pasta da gravação (caixas conferidas a olho em alguns quadros) ou, nas gravações até 03/11,
+ * do log do app desktop (ABI_APP_LOG).
  *
- * ABI_LABEL_BUILD=<pastas de gravação, separadas por vírgula> ABI_APP_LOG=<abi-ear.log> ABI_LABEL_OUT=<arquivo.json> \
+ * ABI_LABEL_BUILD=<pastas de gravação, separadas por vírgula> [ABI_APP_LOG=<abi-ear.log>] ABI_LABEL_OUT=<arquivo.json> \
  *   npx vitest run src/engine/label-models.build.test.ts
  * Opcional: ABI_LABEL_MIN_SCORE e ABI_LABEL_MARGIN (limiares gravados no arquivo; padrão 0,5 e 0,15, da medição de 02/11).
  *
@@ -8,7 +10,7 @@
  * ~17. TEXT_LEVEL fica perto do ponto médio, um pouco abaixo por causa da borda suavizada das letras. Recortes de 1x1,
  * 1x2 e 2x2 conferidos: o 1x1 usa as 4 linhas da célula, e as de 2 de largura usam 2 linhas (metade da célula).
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { decode } from 'jpeg-js'
 import { describe, expect, it } from 'vitest'
@@ -31,12 +33,37 @@ function gray(path: string): Gray {
   return rgbaToGray(img.data as unknown as Uint8ClampedArray, img.width, img.height)
 }
 
-describe.skipIf(!DIRS || !LOG || !OUT)('label models', () => {
+type Truth = { frames: { frame: string; boxes: { col: number; row: number; w: number; h: number; label: string }[] }[] }
+
+describe.skipIf(!DIRS || !OUT)('label models', () => {
   it('builds the models from the recordings', () => {
-    const picks = parseAppPicks(readFileSync(LOG!, 'latin1')).filter((p) => p.label !== null && /^\d+x\d+$/.test(p.size))
+    const picks = LOG ? parseAppPicks(readFileSync(LOG, 'latin1')).filter((p) => p.label !== null && /^\d+x\d+$/.test(p.size)) : []
     const samples = new Map<string, { label: string; w: number; masks: Float32Array[] }>()
     const missed: string[] = []
+    const add = (label: string, w: number, mask: Float32Array) => {
+      const key = `${label}|${w}`
+      const s = samples.get(key) ?? { label, w, masks: [] }
+      s.masks.push(mask)
+      samples.set(key, s)
+    }
     for (const dir of DIRS!.split(',')) {
+      const truthPath = join(dir, 'labels-truth.json')
+      if (existsSync(truthPath)) {
+        // gabarito conferido a olho: cada caixa listada no quadro é uma amostra
+        for (const f of (JSON.parse(readFileSync(truthPath, 'utf8')) as Truth).frames) {
+          const g = gray(join(dir, 'frames', `${f.frame}.jpg`))
+          const scan = scanVendor(g, null)
+          for (const t of f.boxes) {
+            const box = scan?.boxes.find((b) => !b.clipped && b.col === t.col && b.row === t.row && b.w === t.w && b.h === t.h)
+            if (!scan || !box) {
+              missed.push(`${f.frame} ${t.label} ${t.w}x${t.h} em ${t.col},${t.row} (caixa não achada)`)
+              continue
+            }
+            add(t.label, t.w, textMask(g, scan.geometry, box, TEXT_LEVEL))
+          }
+        }
+        continue
+      }
       const frames = readdirSync(join(dir, 'frames'))
         .filter((f) => f.endsWith('.jpg'))
         .map((f) => ({ t: Number(f.slice(0, -4)), path: join(dir, 'frames', f) }))
@@ -66,10 +93,7 @@ describe.skipIf(!DIRS || !LOG || !OUT)('label models', () => {
           missed.push(`${new Date(p.t).toISOString()} ${p.label} ${p.size}`)
           continue
         }
-        const key = `${p.label}|${w}`
-        const s = samples.get(key) ?? { label: p.label!, w, masks: [] }
-        s.masks.push(mask)
-        samples.set(key, s)
+        add(p.label!, w, mask)
       }
     }
     const models: LabelModels = {
