@@ -61,7 +61,7 @@ function start() {
   if (s.example) leaveExample()
   rt.start()
 }
-const helpLines = ['help.pick', 'help.category', 'help.color', 'help.icon', 'help.badge', 'help.dashed'] as const
+const helpLines = ['help.pick', 'help.category', 'help.color', 'help.icon', 'help.revealed', 'help.badge', 'help.dashed'] as const
 
 onMounted(async () => {
   setLocale(locale.value)

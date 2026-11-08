@@ -8,6 +8,10 @@ import { allProfileIds, profilesForLabels, type ProfileChoice } from './profiles
 import { TrackedBox, VendorSession } from './session'
 import type { SessionView } from './view'
 import { boxCells, cellKey, type GridGeometry, type GridScan } from './vision/types'
+import { identify, type BoxImage, type RevealedBox } from './vision/revealed'
+
+/** Ícone de um item na escala da comparação de caixas reveladas (w x h células), ou null enquanto não carregou. */
+export type IconLookup = (itemId: number, w: number, h: number) => BoxImage | null
 
 export const MAX_LAYOUT_AGE_MS = 1500 // pegada só vale se o grid foi visto há pouco
 export const OTHER_PITCH = 0.1 // célula deste tanto maior/menor que a do vendedor guardado: outra tela (inventário)
@@ -29,6 +33,8 @@ export class Controller {
    * as regras que dependem de rótulo (outra tela pelo texto, dica de busca); antes, tudo como na v0.1. */
   labelsSeen = false
   lastArrowMs: number | null = null
+  /** Ícones dos itens para identificar as caixas reveladas (a página e o replay os fornecem). */
+  icons: IconLookup | null = null
   private history = new CursorHistory()
   private votes = new Map<number, { label: string; n: number }>() // uid da caixa -> leitura e quantas vezes seguidas
   private sizes: [number, number][]
@@ -98,7 +104,51 @@ export class Controller {
     // só vota quando a sessão aplicou o scan: aguardando confirmação, as posições guardadas são as do layout anterior
     // os rótulos do quadro só ajudam a reconhecer as caixas numa reorganização; a categoria vem da votação
     const hints = new Map(readings.flatMap((x) => (x.label !== null ? [[cellKey(x.col, x.row), x.label] as const] : [])))
-    if (this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t, hints)) this.vote(readings, r.t)
+    if (this.session.applyScan(this.plausible(r.scan), NO_LABELS, r.t, hints)) {
+      this.vote(readings, r.t)
+      if (r.revealed) this.reveal(r.revealed)
+    }
+  }
+
+  /** Identifica as caixas reveladas ainda sem item: a imagem dentro delas contra os ícones dos itens que cabem. */
+  private reveal(found: readonly RevealedBox[]): void {
+    if (!this.icons) return
+    for (const rb of found) {
+      const box = [...this.session.boxes.values()].find(
+        (b) => !b.clipped && b.col === rb.col && b.row === rb.row + this.session.rowOffset && b.w === rb.w && b.h === rb.h,
+      )
+      if (!box || box.revealedItem !== null) continue
+      const icons: { itemId: number; image: BoxImage }[] = []
+      let pending = false
+      for (const id of this.revealCandidates(box)) {
+        const image = this.icons(id, rb.w, rb.h)
+        if (image) icons.push({ itemId: id, image })
+        else pending = true // ícone ainda carregando: tenta no próximo quadro
+      }
+      if (pending) continue
+      const hit = identify(rb.image, icons)
+      if (!hit) continue
+      box.revealedItem = hit.itemId
+      this.rerank(box)
+    }
+  }
+
+  /** Itens do tamanho da caixa nos pools dos perfis em uso (da categoria, se lida); sem nenhum, todos desse tamanho. */
+  private revealCandidates(box: TrackedBox): number[] {
+    const typeId = box.label !== null ? (this.ds.typeIds.get(box.label) ?? null) : null
+    const fits = (id: number) => {
+      const it = this.ds.items.get(id)
+      return !!it && it.size[0] === box.w && it.size[1] === box.h
+    }
+    const inPools = (type: number | null) => {
+      const ids = new Set<number>()
+      for (const p of this.profiles()) for (const pool of this.ds.poolsFor(p, type, null)) for (const e of pool.entries) if (fits(e.itemId)) ids.add(e.itemId)
+      return [...ids]
+    }
+    const byType = typeId !== null ? inPools(typeId) : []
+    if (byType.length) return byType
+    const any = inPools(null)
+    return any.length ? any : [...this.ds.items.keys()].filter(fits)
   }
 
   onPickup(e: Pickup): PickupOutcome {
@@ -127,6 +177,7 @@ export class Controller {
         clipped: b.clipped,
         label: b.label,
         picks: b.picks,
+        revealed: b.revealedItem !== null,
         sizeRelaxed: b.ranking?.sizeRelaxed ?? false,
         candidates: (b.ranking?.candidates ?? []).map((c) => ({
           itemId: c.item.id,
@@ -140,6 +191,11 @@ export class Controller {
   }
 
   private rerank(box: TrackedBox): void {
+    const item = box.revealedItem !== null ? this.ds.items.get(box.revealedItem) : undefined
+    if (item) {
+      box.ranking = { candidates: [{ item, pct: 100 }], sizeRelaxed: false } // o jogo mostrou o item: não há dúvida
+      return
+    }
     const typeId = box.label !== null ? (this.ds.typeIds.get(box.label) ?? null) : null
     box.ranking = rank(this.ds, this.profiles(), typeId, null, box.hits(), box.size)
   }

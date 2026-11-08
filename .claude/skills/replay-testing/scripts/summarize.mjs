@@ -17,6 +17,8 @@ function parse(dir) {
       attribution: json(/^\d+ pegadas do app.*\n(\{.*\})$/m),
       categories: json(/^categorias \(\d+ pegadas do log com categoria\): (\{.*\})$/m),
       live: json(/^ao vivo \(\d+ pegadas no events\.jsonl\): (\{.*\})$/m),
+      revealed: (text.match(/^caixas reveladas identificadas: (\d+)\n((?:  .*\n?)*)/m) ?? [])
+        .slice(1),
       failed: existsSync(log) && /FAIL|Error:/.test(readFileSync(log, 'utf8')),
     })
   }
@@ -48,6 +50,11 @@ for (const [name, r] of now) {
   if (r.attribution) console.log(`  atribuição (contra o app desktop): ${fmt(r.attribution, A)}${delta(r.attribution, b?.attribution, A)}`)
   if (r.categories && Object.values(r.categories).some((v) => v > 0)) console.log(`  categorias (contra o app desktop): ${fmt(r.categories, C)}${delta(r.categories, b?.categories, C)}`)
   if (r.live) console.log(`  contra o ao vivo: ${fmt(r.live, L)}${delta(r.live, b?.live, L)}`)
+  if (r.revealed.length && Number(r.revealed[0]) > 0) {
+    const items = r.revealed[1].trim().split('\n').map((l) => l.replace(/^.*: /, ''))
+    const count = new Map(); for (const it of items) count.set(it, (count.get(it) ?? 0) + 1)
+    console.log(`  caixas reveladas identificadas: ${r.revealed[0]} (${[...count].map(([k, v]) => `${k} x${v}`).join(', ')})`)
+  }
   for (const [k, keys] of [['attribution', A], ['categories', C]]) for (const key of keys) if (r[k]?.[key] !== undefined) total[k][key] = (total[k][key] ?? 0) + r[k][key]
 }
 if (Object.keys(total.attribution).length) {

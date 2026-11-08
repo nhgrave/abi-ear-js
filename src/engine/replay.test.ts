@@ -23,6 +23,8 @@ import { FramePipeline } from './pipeline'
 import { rgbaToGray } from './vision/image'
 import type { LabelModels } from './vision/label-reader'
 import { mergeLabelModels } from '../live/label-data'
+import { PNG } from 'pngjs'
+import { iconImage, type BoxImage } from './vision/revealed'
 import { fixturePath, readF32, readJson } from '../test-utils/fixtures'
 import { parseAppPicks, type AppPick } from '../test-utils/app-log'
 
@@ -89,6 +91,27 @@ describe.skipIf(!DIR)('replay of a real recording', () => {
     const listener = new Listener(matcher)
     const controller = new Controller(ds)
     controller.setProfile('auto') // o padrão da página
+    // ícones das caixas reveladas, como a página os baixa de data/icons
+    const iconCache = new Map<string, BoxImage>()
+    controller.icons = (id, w, h) => {
+      const key = `${id}:${w}x${h}`
+      let img = iconCache.get(key)
+      if (!img) {
+        const png = PNG.sync.read(readFileSync(join('public/data/icons', `${Math.trunc(id)}.png`)))
+        img = iconImage({ w: png.width, h: png.height, data: png.data }, w, h)
+        iconCache.set(key, img)
+      }
+      return img
+    }
+    const revealedSeen = new Set<number>()
+    const revealedLines: string[] = []
+    const noteRevealed = (t: number) => {
+      for (const b of controller.session.boxes.values()) {
+        if (b.revealedItem === null || revealedSeen.has(b.uid)) continue
+        revealedSeen.add(b.uid)
+        revealedLines.push(`  ${new Date(t).toISOString()} (${b.col}, ${b.row}) ${b.w}x${b.h} ${b.label ?? 'sem categoria'}: ${ds.items.get(b.revealedItem)?.name}`)
+      }
+    }
     const pipeline = new FramePipeline(MODELS ? mergeLabelModels(MODELS.split(',').map((f) => readJson<LabelModels>(f))) : null)
     const picks = (LOG ? parseAppPicks(readFileSync(LOG, 'latin1')) : []).filter((p) => p.t >= frames[0].t && p.t <= frames[frames.length - 1].t)
     const counts: Record<string, number> = {}
@@ -198,6 +221,7 @@ describe.skipIf(!DIR)('replay of a real recording', () => {
         const r = pipeline.process(gray, frames[fi].t, controller.hint(), { w: img.width, h: img.height, data: img.data })
         if (r.labelMs !== undefined) labelMs.push(r.labelMs)
         controller.onFrame(r)
+        noteRevealed(frames[fi].t)
         snapshot(frames[fi].t)
         judgeLabels(frames[fi].t)
         fi++
@@ -221,7 +245,8 @@ describe.skipIf(!DIR)('replay of a real recording', () => {
     const appSummary = LOG
       ? `${picks.length} pegadas do app, ${heard} com som, ${heardTotal} pegadas ouvidas\n${JSON.stringify(counts)}\n${wrong.join('\n')}\n`
       : `sem log do app; ${heardTotal} pegadas ouvidas\n`
-    const summary = `${DIR}\n${appSummary}${liveSummary}${labelSummary}${snapshots.map((x) => `${x}\n`).join("")}`
+    const revealedSummary = `caixas reveladas identificadas: ${revealedLines.length}\n${revealedLines.map((x) => `${x}\n`).join('')}`
+    const summary = `${DIR}\n${appSummary}${liveSummary}${labelSummary}${revealedSummary}${snapshots.map((x) => `${x}\n`).join("")}`
     console.log(summary)
     if (process.env.ABI_REPLAY_OUT) writeFileSync(process.env.ABI_REPLAY_OUT, summary)
     if (STRICT && LOG) {

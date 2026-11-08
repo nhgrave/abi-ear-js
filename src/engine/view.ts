@@ -14,6 +14,7 @@ export type BoxView = {
   picks: number
   candidates: CandidateView[]
   sizeRelaxed: boolean
+  revealed: boolean // o jogo revelou o item (a imagem dentro da caixa): o único candidato, mesmo sem pegada
 }
 
 export type SessionView = {

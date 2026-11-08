@@ -8,6 +8,7 @@ import type { SessionView } from '../engine/view'
 import type { MessageKey } from '../i18n'
 import workletUrl from './audio-worklet.ts?worker&url'
 import { LABEL_MODELS_URLS, loadLabelModels } from './label-data'
+import { createIconLookup } from './icons'
 import { audioTimeMs, DISPLAY_MEDIA_OPTIONS, outputTimestamp, streamProblemKeys } from './capture'
 import { LiveEvents, pickupEvent, type LiveEvent } from './live-events'
 import { audioHealth, cursorHealth, screenHealth, vendorHealth, type Health } from './health'
@@ -137,6 +138,7 @@ export function createRuntime() {
       models = await loadLabelModels() // opcional: sem modelos, segue sem ler os rótulos
       if (!models) console.warn(`abi-ear: modelos de rótulo indisponíveis (${LABEL_MODELS_URLS.join(', ')}); seguindo sem ler os rótulos`)
       controller = new Controller(ds)
+      controller.icons = createIconLookup() // caixas reveladas: compara a imagem delas com os ícones dos itens
       state.profile = parseProfileChoice(readProfile(), ds) // perfil que a base não tem mais: automático
       controller.setProfile(state.profile)
       state.dataVersion = ds.version
