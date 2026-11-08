@@ -179,8 +179,16 @@ export class VendorSession {
       x = Math.min(Math.max(x, g.x0), right - 1) // x0 lido com 1–2 px de erro não perde o clique na borda da caixa
     }
     const cell = cellAt(g, x, y)
-    if (cell === null) return null
-    return this.boxContaining(cell[0], cell[1] + this.rowOffset)
+    if (cell !== null) return this.boxContaining(cell[0], cell[1] + this.rowOffset)
+    // a linha cortada logo abaixo (ou acima) das linhas inteiras ainda é da caixa cortada naquela beira: o jogador
+    // clica na metade que aparece
+    const col = Math.floor((x - g.x0) / g.pitch)
+    const row = Math.floor((y - g.y0) / g.pitch)
+    if (col < 0 || col >= g.cols || (row !== g.rows && row !== -1)) return null
+    const known = this.boxContaining(col, row + this.rowOffset) // já vista inteira, rolando
+    if (known) return known
+    const edge = this.boxContaining(col, (row === -1 ? 0 : g.rows - 1) + this.rowOffset)
+    return edge?.clipped ? edge : null
   }
 
   isExpired(nowMs: number, timeoutMs = SESSION_TIMEOUT_MS): boolean {
@@ -324,9 +332,13 @@ export class VendorSession {
       return cellKey(c, r + off)
     }))
     const inView = new Map<string, TrackedBox>()
+    // em parte na tela, com a parte visível sem nada cobrindo: só serve para notar que ela sumiu do lugar
+    const partlyInView = new Map<string, TrackedBox>()
     for (const [k, b] of this.boxes) {
       const cells = b.cells()
-      if ([...cells].every((key) => top <= rowOfKey(key) && rowOfKey(key) < bottom) && !intersects(cells, uncertain)) inView.set(k, b)
+      const visible = [...cells].filter((key) => top <= rowOfKey(key) && rowOfKey(key) < bottom)
+      if (visible.length === cells.size && !intersects(cells, uncertain)) inView.set(k, b)
+      else if (!b.clipped && visible.length > 0 && !visible.some((key) => uncertain.has(key))) partlyInView.set(k, b)
     }
     const conflicts = this.conflicts(scan, inView, nowMs)
     if (conflicts >= REFLOW_MIN_CONFLICTS) {
@@ -428,6 +440,12 @@ export class VendorSession {
       if (!consumed.has(k) && !intersects(gone.cells(), occupied) && nowMs - gone.seenAt < VANISH_GRACE_MS) continue
       this.forget(k, nowMs)
     }
+    // a caixa que passa da beira da tela também some: o vendedor a levou para outro lugar depois de uma compra e a
+    // parte visível ficou vazia (se outra caixa ocupou o lugar, as novas abaixo a removem)
+    for (const [k, gone] of partlyInView) {
+      if (keep.has(k) || consumed.has(k) || nowMs - gone.seenAt < VANISH_GRACE_MS) continue
+      if (!intersects(gone.cells(), occupied)) this.forget(k, nowMs)
+    }
     for (const k of consumed) this.boxes.delete(k)
     for (const nw of added) {
       if (!nw.clipped) {
@@ -444,7 +462,9 @@ export class VendorSession {
   /** O scan sem as caixas com forma de leitura errada, que viram células incertas (as guardadas ficam):
    * - menor e dentro de uma caixa guardada cujo resto não tem caixa: o item levantado deixa o lugar vazio com uma
    *   célula vermelha, lida como caixa;
-   * - exatamente a junção de duas ou mais caixas guardadas: o tooltip esconde a divisória entre elas.
+   * - exatamente a junção de duas ou mais caixas guardadas: o tooltip esconde a divisória entre elas;
+   * - uma ou mais caixas guardadas mais células vazias em volta, numa leitura com células incertas ou tooltip, ou
+   *   com texto claro abaixo do rótulo (lit): o tooltip cobre a beira da caixa e o vazio ao lado.
    * A mesma forma por SUSPECT_MAX_MS passa a valer (a caixa guardada é que estava errada). */
   private withoutSuspects(scan: GridScan, nowMs: number): GridScan {
     const off = this.rowOffset
@@ -453,6 +473,7 @@ export class VendorSession {
     const scanCells = scan.boxes.map(cellsOf)
     const suspects = new Map<string, number>()
     const drop = new Set<BoxRect>()
+    const murky = scan.uncertain.size > 0 || scan.overlays.length > 0
     scan.boxes.forEach((rect, i) => {
       if (rect.clipped) return
       const cells = scanCells[i]
@@ -465,8 +486,15 @@ export class VendorSession {
         return !scanCells.some((other, j) => j !== i && rest.some((k) => other.has(k)))
       })
       const parts = stored.filter((b) => [...b.cells()].every((k) => cells.has(k)))
-      const merged = parts.length >= 2 && parts.reduce((n, b) => n + b.w * b.h, 0) === cells.size
-      if (!lifted && !merged) return
+      const covered = parts.reduce((n, b) => n + b.w * b.h, 0)
+      const merged = parts.length >= 2 && covered === cells.size
+      // a caixa guardada mais células vazias em volta: o tooltip cobriu a beira dela e o vazio ao lado
+      const extra = [...cells].filter((k) => !parts.some((b) => b.cells().has(k)))
+      // (só numa leitura com algo encoberto: uma caixa nova maior no lugar de uma pequena, depois de uma compra, vem
+      // numa leitura limpa e vale na hora)
+      const grown =
+        (murky || rect.lit) && parts.length >= 1 && extra.length > 0 && !stored.some((b) => !parts.includes(b) && extra.some((k) => b.cells().has(k)))
+      if (!lifted && !merged && !grown) return
       const key = `${rect.col},${row},${rect.w},${rect.h}`
       const since = this.suspects.get(key) ?? nowMs
       suspects.set(key, since)

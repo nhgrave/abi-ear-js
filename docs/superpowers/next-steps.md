@@ -26,10 +26,8 @@ Para validar os modelos que saíram de uma só gravação (2026-11-02-185459) e 
 - Como: gravar só com a página (sem o app desktop), pegar caixas de várias categorias, depois reconstruir os modelos
   com todas as gravações e rodar o replay deixando cada gravação de fora (comandos no README, seção
   Desenvolvimento, e no adendo da spec `specs/2026-11-02-v0.2-labels-design.md`). Critério: zero categorias erradas.
-- [ ] Gabarito sem o app desktop: até a v0.2.2, a categoria certa de cada pegada vinha do log do app
-  (`ABI_APP_LOG`). Nas gravações novas, a categoria tem de sair dos próprios quadros: recortar o rótulo de cada caixa
-  pega, conferir o texto na imagem e gravar o gabarito junto da gravação, para o construtor de modelos e o replay
-  lerem de lá.
+- [x] Gabarito sem o app desktop: `labels-truth.json` na pasta da gravação, com as caixas de alguns quadros
+  conferidas a olho (nome da categoria em inglês). O construtor de modelos lê de lá (v0.2.4, gravação 114326).
 - Atualizar o README ("Limitações da v0.2") com a lista real de categorias sem modelo.
 
 ## 3. v0.2.1 (publicada em 03/11)
@@ -62,6 +60,22 @@ Purchase ativa; caixa lida errada no arrasto ou sob tooltip volta com a categori
     células incertas e a caixa guardada fica (`session.withoutSuspects`); a forma que dura 8 s passa a valer.
   - [x] Modelos de rótulo refeitos com a 220143 (Medical Supplies, Uncommon Military Items, Military Items de 1 e
     Uncommon Mystery Cargo de 3 de largura), conferidos na 200938, que não entrou na construção.
+  - [x] Caixa lida maior sob um tooltip que passa por cima de células vazias (gravação 114326: 2x2 na beira direita lida
+    como 3x2): numa leitura com células incertas ou tooltip, vira suspeita como a caixa levantada (v0.2.4).
+  - [x] Caixas fantasma em células vazias (gravação 160851): o painel do vendedor é transparente e o personagem, por
+    trás, deixa textura nas células vazias, lidas como caixas a descobrir. A varredura agora exige rótulo claro no alto
+    da caixa (`hasLabelText`); seis quadros de referência do Python tinham caixas assim, todas em áreas vazias (v0.2.4).
+  - [x] A caixa crescida sobre células vazias também fica suspeita numa leitura limpa quando há texto claro abaixo do
+    rótulo (`lit`: o tooltip não achado por cima). Caixas reveladas também acendem, mas só contam se crescerem (v0.2.4).
+  - [x] Caixa que passa da beira da tela some quando a parte visível fica vazia (gravação 192442: depois da compra, o
+    vendedor levou a caixa de baixo para o lugar da comprada e a antiga ficava no grid) (v0.2.4).
+  - [x] Clique na metade cortada da caixa na beira de baixo (ou de cima) da grade: a linha cortada conta como da caixa
+    cortada naquela coluna (gravação 2026-11-07-214528, Arsenal: 6 pegadas seguidas ficavam sem caixa) (v0.2.4).
+  - [x] Dica "R Girar" do arrasto: texto claro fora da primeira linha do rótulo deixa as células incertas, em vez de
+    virar caixa ou de sumir com as caixas de baixo (v0.2.4).
+  - [ ] Caixa fantasma quando o canto do quadro da dica "R Girar" cai no alto de uma célula vermelha do arrasto
+    (gravação 192442, 19:26:38: virou uma 1x1 sem categoria que ficou no grid). Estreitar a busca do rótulo para o
+    começo da linha resolve, mas derruba caixas de rótulo cortado no topo em dois quadros de referência.
   - [ ] O tooltip com a seta do cursor sobre a cantoneira de cima não é achado (`findOverlays`): o contorno da seta
     corta a cantoneira. Juntar as falhas da máscara inteira cria cantos falsos no texto; precisa de outra regra.
   - "Sem som" no replay (38 pegadas do app): nas gravações do protótipo (02/11) o relógio do áudio tem desvio de
@@ -84,6 +98,20 @@ Purchase ativa; caixa lida errada no arrasto ou sob tooltip volta com a categori
 - Botão de diagnóstico local.
 - `getImageData` de cerca de 4 MB por quadro no worker de visão (a metade direita, desde a v0.2.2).
 - v0.3: preço do tooltip e rótulos em português (o autor troca o idioma do jogo para os testes locais).
+  - [x] Rótulos em português (v0.2.4): `public/data/labels/pt.json`, 21 modelos das gravações 2026-11-07-114326 e
+    160851 (Vale) e 192442 (Aeroporto), jogo em português: Carga Misteriosa (larguras 1, 2 e 3), Carga Misteriosa
+    Incomum (1, 2 e 3), Itens Domésticos, Materiais de Construção, Inflamáveis, Ferramentas, Papel, Itens de Energia (1
+    e 3), Colecionáveis (1 e 2), Instrumentos, Suprimentos Médicos, Peças de Computador, Itens Militares (1), Itens
+    Militares Incomuns e Colecionáveis Raros (este ainda sem modelo em inglês). A página lê com os dois idiomas juntos;
+    a margem de confiança vale contra a melhor das outras categorias.
+  - [ ] Português, Fazenda/Vale/Arsenal: falta Rare Mystery Cargo (1, 2 e 3), mais comum no Proibido e na Infecção
+    Severa.
+  - [ ] Português, Northridge/TV Station/Aeroporto: faltam Electronics, Uncommon Collectibles, Military Items de 2 de
+    largura, Rare Mystery Cargo e Rare Medical Supplies (também sem modelo em inglês). Itens Militares de 2 pode ser
+    lido como Itens Militares Incomuns enquanto não tiver modelo: conferir na próxima gravação.
+  - [ ] Caixas reveladas ("Reveladas para você: 4 cargas misteriosas de qualidade Roxa"): o vendedor mostra a imagem do
+    item dentro da caixa. Dá para ler o item direto e usar como gabarito de itens.
+  - A gravação 114326 tem tooltips com o preço ("24.000" e o antigo "30.000" riscado): material para a leitura de preço.
   - O preço da caixa diz de qual pool ela saiu: em 50 das 110 combinações de perfil e categoria há mais de um preço,
     com raridades bem diferentes (Mystery Cargo: 0% de vermelho a 40.000, 0,1% a 70.000, 4% a 250.000). Hoje a página
     mistura os pools pelo peso. O motor já filtra por preço (`rank(..., price, ...)`, e ignora um preço sem pool); falta

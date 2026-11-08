@@ -14,6 +14,7 @@ export type BoxRect = {
   w: number
   h: number
   clipped: boolean // cortada na borda superior/inferior da área visível
+  lit?: true // texto ou imagem clara abaixo do rótulo: um tooltip por cima ou o item revelado (o baú é escuro)
 }
 
 export type Rect = [xa: number, ya: number, xb: number, yb: number]

@@ -1,6 +1,6 @@
 import { readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { findOverlays, openHorizontal, openVertical, scan, type GridGeometry, type GridScan } from './grid'
+import { extractBoxes, findOverlays, openHorizontal, openVertical, scan, type GridGeometry, type GridScan } from './grid'
 import { fixturePath, hasFixtures, readGray, readJson } from '../../test-utils/fixtures'
 
 type GoldenScan = {
@@ -15,9 +15,28 @@ const FRAMES = hasFixtures('frames')
   ? readdirSync(fixturePath('frames')).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)).sort()
   : []
 
-function expectSameScan(got: GridScan | null, want: GoldenScan) {
+// "caixas" que a versão em Python lia em áreas vazias (células sem rótulo, com o fundo transparente deixando ver o
+// personagem atrás do painel). Quase todas têm tamanho impossível para um item; a 2x2 do vanish_before é a que a
+// página mostrava como caixa a descobrir. A varredura daqui exige rótulo e não as lê
+const READ_IN_EMPTY_CELLS: Record<string, string[]> = {
+  live_revealed_tooltip: ['0,9,9,1,true'],
+  live_tooltip_right: ['4,9,5,1,true'],
+  live_vendor_backpack: ['2,0,6,4,false'],
+  reflow_after: ['4,9,5,1,true'],
+  reflow_before: ['0,9,4,2,true'],
+  frame_22_5: ['0,3,4,3,false'], // junção sob a dica "R Rotate": aqui vira células incertas
+  vanish_before: ['6,0,4,4,true', '7,7,2,2,true'],
+}
+
+function expectSameScan(got: GridScan | null, want: GoldenScan, ignore: string[] = []) {
   expect(got === null).toBe(want === null)
   if (got === null || want === null) return
+  // as células dessas "caixas" podem vir incertas daqui (algo por cima) ou ficar de fora (vazias)
+  const ignoredCells = new Set(
+    want.boxes.filter((b) => ignore.includes(b.join(','))).flatMap(([c, r, w, h]) => Array.from({ length: w * h }, (_, i) => `${c + (i % w)},${r + Math.floor(i / w)}`)),
+  )
+  got = { ...got, uncertain: new Set([...got.uncertain].filter((k) => !ignoredCells.has(k))) }
+  want = { ...want, boxes: want.boxes.filter((b) => !ignore.includes(b.join(','))) }
   const g = got.geometry
   const w = want.geometry
   expect(Math.abs(g.x0 - w.x0)).toBeLessThanOrEqual(1)
@@ -36,9 +55,10 @@ describe.skipIf(FRAMES.length === 0)('scan matches the python golden on every fi
     it(name, () => {
       const golden = readJson<Golden>(fixturePath('frames', `${name}.json`))
       const gray = readGray(name)
-      expectSameScan(scan(gray), golden.full)
+      const ignore = READ_IN_EMPTY_CELLS[name] ?? []
+      expectSameScan(scan(gray), golden.full, ignore)
       const half = Math.floor(golden.w / 2)
-      expectSameScan(scan(gray, [half, 0, golden.w - half, golden.h]), golden.right)
+      expectSameScan(scan(gray, [half, 0, golden.w - half, golden.h]), golden.right, ignore)
     })
   }
 })
@@ -83,6 +103,50 @@ describe('tooltip cut by the right edge of the screen', () => {
 
   it('is found from its top-left corner', () => {
     expect(findOverlays(frame(), geom)).toHaveLength(1)
+  })
+})
+
+describe('empty cell with the character showing through', () => {
+  // gravação 2026-11-07-160851: o painel do vendedor é transparente e o braço do personagem, por trás, deixa a
+  // célula vazia com textura (desvio ~14, cinza até ~62). Sem rótulo claro, não é caixa
+  const geom: GridGeometry = { x0: 10, y0: 10, pitch: 64, cols: 3, rows: 1 }
+  const frame = () => {
+    const w = 220
+    const h = 90
+    const data = new Uint8Array(w * h).fill(3)
+    const fill = (x: number, y: number, fw: number, fh: number, v: number) => {
+      for (let yy = y; yy < y + fh; yy++) for (let xx = x; xx < x + fw; xx++) data[yy * w + xx] = v
+    }
+    fill(11, 11, 63, 63, 20) // caixa em (0,0): fundo
+    fill(30, 35, 26, 20, 44) // ícone
+    for (let x = 14; x < 50; x += 3) fill(x, 14, 2, 9, 200) // rótulo
+    let seed = 7
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31)
+    for (let y = 20; y < 66; y++) for (let x = 80; x < 130; x++) data[y * w + x] = Math.round(rnd() * 60) // braço, célula (1,0)
+    for (let c = 0; c <= 3; c++) fill(10 + c * 64, 10, 1, 65, 60) // divisórias
+    fill(10, 10, 193, 1, 60)
+    fill(10, 74, 193, 1, 60)
+    return { w, h, data }
+  }
+
+  it('is not read as a box, while the labelled box next to it is', () => {
+    expect(extractBoxes(frame(), geom).boxes.map((b) => [b.col, b.row, b.w, b.h])).toEqual([[0, 0, 1, 1]])
+  })
+
+  it('is not read as a box when only the drag hint ("R Girar") shows text in it: the cell is uncertain', () => {
+    // gravação 2026-11-07-192442: arrastando uma caixa, o jogo mostra a dica perto do cursor, no meio da célula
+    const f = frame()
+    for (let y = 30; y < 40; y++) for (let x = 90; x < 125; x += 2) f.data[y * f.w + x] = 230
+    const scan = extractBoxes(f, geom)
+    expect(scan.boxes.map((b) => [b.col, b.row])).toEqual([[0, 0]])
+    expect([...scan.uncertain]).toEqual(['1,0'])
+  })
+
+  it('marks a box with bright text below its label (a tooltip over it, or a revealed item)', () => {
+    const f = frame()
+    expect(extractBoxes(f, geom).boxes[0].lit).toBeUndefined() // o ícone do baú (~44) não acende
+    for (let y = 52; y < 62; y++) for (let x = 14; x < 70; x += 2) f.data[y * f.w + x] = 220 // "Adicionar ao Carrinho"
+    expect(extractBoxes(f, geom).boxes[0].lit).toBe(true)
   })
 })
 

@@ -9,7 +9,7 @@ mostra, num grid espelhado, os itens prováveis de cada caixa, com a porcentagem
 
 *English:* find out what's inside the Merchant Raid vendor boxes from the pickup sound and the screen. Open the
 link, share your entire screen with system audio, and drag the boxes at the vendor. The page reads each box's
-category (game in English) and picks the map family by itself.
+category (game in English or Portuguese) and picks the map family by itself.
 
 Para ver como fica sem abrir o jogo, clique em **Ver exemplo** na página, ou abra
 https://nhgrave.github.io/abi-ear-js/?preview. O exemplo é um vendedor de verdade com pegadas de mentira.
@@ -26,8 +26,8 @@ https://nhgrave.github.io/abi-ear-js/?preview. O exemplo é um vendedor de verda
 - **Qual caixa:** a página acha a seta do cursor do Windows no vídeo, entre 150 e 400 ms antes do som. Se a seta
   não estiver parada sobre uma caixa nesse intervalo, a pegada fica como "caixa não identificada" e a página não
   chuta.
-- **Categoria:** a página lê o rótulo escrito no topo de cada caixa ("Energy Items", "Mystery Cargo"...), comparando
-  com modelos de imagem de cada categoria. A categoria só vale depois de duas leituras iguais, e na dúvida a caixa
+- **Categoria:** a página lê o rótulo escrito no topo de cada caixa ("Energy Items", "Carga Misteriosa"...),
+  comparando com modelos de imagem de cada categoria, em inglês e em português (não é preciso escolher o idioma). A categoria só vale depois de duas leituras iguais, e na dúvida a caixa
   fica sem categoria.
 - **Mapa:** no "Automático (pelos rótulos)", as categorias vistas no vendedor dizem a família de mapas. O seletor
   continua lá para escolher o mapa e o modo à mão.
@@ -42,10 +42,11 @@ https://nhgrave.github.io/abi-ear-js/?preview. O exemplo é um vendedor de verda
 - Cursor padrão do Windows, com escala de 100%.
 - Só 1920×1080 foi testado.
 
-## Limitações da v0.2
+## Limitações
 
-- Só lê o jogo em **inglês**. Com o jogo em outro idioma a página funciona como a v0.1: sem categoria, e o mapa e o
-  modo escolhidos à mão (ou "Todos os mapas").
+- Lê o jogo em **inglês** e em **português**. Em português ainda faltam Eletrônicos, Colecionáveis Incomuns, Itens
+  Militares de 2 de largura, Carga Misteriosa Rara e Suprimentos Médicos Raros (ficam sem categoria). Em outro idioma, a página funciona sem categoria, e o mapa e o
+  modo são escolhidos à mão (ou "Todos os mapas").
 - Os modelos de algumas categorias saíram de poucas amostras: Medical Supplies, Military Items e Uncommon Mystery
   Cargo de 1 e de 3 de largura, Uncommon Military Items, Rare Mystery Cargo e Paper. Ainda sem modelo (ficam sem
   categoria): Rare Medical Supplies, Rare Collectibles e as larguras que não apareceram nas gravações.
@@ -81,17 +82,18 @@ de aceitação do motor. Ele compara com o `events.jsonl` da gravação, quando 
 só se `ABI_APP_LOG` for passado (o critério estrito vale só com o log do app):
 
 ```bash
-ABI_REPLAY=<pasta da gravação> [ABI_APP_LOG=<abi-ear.log>] ABI_LABEL_MODELS=public/data/labels/en.json \
+ABI_REPLAY=<pasta da gravação> [ABI_APP_LOG=<abi-ear.log>] ABI_LABEL_MODELS=public/data/labels/en.json,public/data/labels/pt.json \
   ABI_REPLAY_OUT=replay.txt npx vitest run src/engine/replay.test.ts
 ```
 
-Os modelos de rótulo (`public/data/labels/en.json`) saem das gravações e da categoria que o log do app desktop
-registrou em cada pegada (gravações até 03/11; as novas, sem o app, vão precisar de um gabarito tirado dos próprios
-quadros):
+Os modelos de rótulo saem das gravações, um arquivo por idioma do jogo (`public/data/labels/en.json` e `pt.json`),
+e a página lê com os dois juntos. A categoria certa de cada amostra vem do `labels-truth.json` da pasta da gravação:
+caixas de alguns quadros conferidas a olho, com o nome da categoria em inglês. As gravações até 03/11 usam a categoria
+que o log do app desktop registrou em cada pegada (`ABI_APP_LOG`):
 
 ```bash
-ABI_LABEL_BUILD=<pastas de gravação, separadas por vírgula> ABI_APP_LOG=<abi-ear.log> \
-  ABI_LABEL_OUT=public/data/labels/en.json ABI_LABEL_MIN_SCORE=0.5 ABI_LABEL_MARGIN=0.15 \
+ABI_LABEL_BUILD=<pastas de gravação, separadas por vírgula> [ABI_APP_LOG=<abi-ear.log>] \
+  ABI_LABEL_OUT=public/data/labels/pt.json ABI_LABEL_MIN_SCORE=0.5 ABI_LABEL_MARGIN=0.15 \
   npx vitest run src/engine/label-models.build.test.ts
 ```
 
