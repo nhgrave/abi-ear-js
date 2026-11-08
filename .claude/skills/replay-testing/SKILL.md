@@ -45,6 +45,11 @@ Groups: `en` = the 5 English recordings with the desktop app log (the attributio
 - `? (moving)`, `? (no-box)`, `? (no-cursor)`: pickup left unassigned on purpose; check the frames before the sound.
 - `? (no-frame)`: the recording has no frame in the window before the sound (`gaps.sh`); it cannot be judged.
 - `moving` on one side and a box on the other is usually frame timing (live and replay analyze different frames).
+- `caixas reveladas identificadas`: boxes the game revealed (rarity background, item picture) matched to an item
+  icon. Only 2026-11-07-160851 has them; any identification elsewhere is a false positive. 2026-11-08-155416 has
+  *quality* reveals ("Qualidade ... revelada": rarity background, generic crate, no item picture): 0 expected there.
+- The game chat line "<player> gastou N Koen em uma carga misteriosa e obteve [Item]" is ground truth for the box
+  that was bought: check that the item was among the page's candidates for that box.
 
 ## Common mistakes
 - A round takes 10–15 min (frames are read from the Windows disk): run it in the background and wait for the

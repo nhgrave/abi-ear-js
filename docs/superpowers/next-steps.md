@@ -104,13 +104,35 @@ Purchase ativa; caixa lida errada no arrasto ou sob tooltip volta com a categori
     e 3), Colecionáveis (1 e 2), Instrumentos, Suprimentos Médicos, Peças de Computador, Itens Militares (1), Itens
     Militares Incomuns e Colecionáveis Raros (este ainda sem modelo em inglês). A página lê com os dois idiomas juntos;
     a margem de confiança vale contra a melhor das outras categorias.
-  - [ ] Português, Fazenda/Vale/Arsenal: falta Rare Mystery Cargo (1, 2 e 3), mais comum no Proibido e na Infecção
-    Severa.
-  - [ ] Português, Northridge/TV Station/Aeroporto: faltam Electronics, Uncommon Collectibles, Military Items de 2 de
-    largura, Rare Mystery Cargo e Rare Medical Supplies (também sem modelo em inglês). Itens Militares de 2 pode ser
+  - [x] Eletrônicos (1) e Carga Misteriosa Rara (2) em português (v0.2.5), da gravação 2026-11-08-155416 (Aeroporto
+    Proibido). "Carga Misteriosa" é o começo de "Carga Misteriosa Rara" e a segunda linha ("Rara") é curta: numa
+    leitura perfeita a outra fica em ~0,87, então o arquivo pt usa folga de 0,08 (cada arquivo leva a sua folga nos
+    seus modelos, como a nota mínima). As amostras de um modelo agora são alinhadas antes da média (duas amostras a
+    1 px uma da outra davam um modelo borrado, que lia a própria categoria com 0,73).
+  - [x] Caixa de qualidade revelada partida ao meio (v0.2.5): comprar uma carga revelou a qualidade de 2 caixas
+    (gravação 2026-11-08-155416); o fundo ganha a cor da raridade e a divisória entre as células aparece fraca por
+    cima (~37–44), e a 1x2 roxa virava 1x1 mais uma caixa fantasma. A borda de caixa agora pede cinza acima de 50
+    (`BRIGHT`; as bordas entre caixas ficam em ~60–67).
+    Efeito colateral medido: perto do tooltip, a caixa sob o cursor e as vizinhas saem incertas em vez de caixa (com
+    40 saía também uma 1x1 fantasma na borda do tooltip); atribuição e categorias iguais nas 11 gravações.
+  - [ ] Caixa partida pelo cursor: na 160851 (19:11:08), um quadro com a seta bem na divisa da caixa revelada 2x1
+    em (0,1) a lê como duas 1x1, a sessão aceita e, na segunda visita (19:12:30), a caixa fica como 1x1 "sem
+    categoria" e a imagem do Portable Jack não é comparada (7 de 8 identificações, antes 8 por acaso de quais
+    quadros a sessão aproveitou). A sessão não deveria partir uma caixa conhecida por um quadro com o cursor em cima.
+  - [ ] Qualidade revelada: usar a cor do fundo (roxo, dourado...) para ficar só com os itens daquela raridade. O
+    rótulo sobre o fundo dourado lê "Carga Misteriosa" com 0,89 (abaixo do 0,9 do pt): a caixa mantém a categoria
+    lida antes, mas uma que já chegasse revelada ficaria sem.
+  - [ ] Português, Fazenda/Vale/Arsenal: falta Rare Mystery Cargo de 1 e de 3 de largura, mais comum no Proibido e na
+    Infecção Severa.
+  - [ ] Português, Northridge/TV Station/Aeroporto: faltam Uncommon Collectibles, Military Items de 2 de largura e
+    Rare Medical Supplies (também sem modelo em inglês). Itens Militares de 2 pode ser
     lido como Itens Militares Incomuns enquanto não tiver modelo: conferir na próxima gravação.
-  - [ ] Caixas reveladas ("Reveladas para você: 4 cargas misteriosas de qualidade Roxa"): o vendedor mostra a imagem do
-    item dentro da caixa. Dá para ler o item direto e usar como gabarito de itens.
+  - [x] Caixas reveladas ("Reveladas para você: 4 cargas misteriosas de qualidade Roxa"): fundo da cor da raridade e a
+    imagem do item a 80% da caixa, centralizada. A página compara a imagem com os ícones dos itens que cabem (cores,
+    só nos pixels do ícone) e mostra o item com 100% sem pegar (`vision/revealed.ts`, v0.2.5). Na gravação 160851: o
+    item certo dá 0,74–0,92 contra todos os do mesmo tamanho; o segundo, até 0,44; caixa comum, até 0,47. Os 189
+    ícones se distinguem entre si com folga de mais de 0,15 (`revealed.icons.test.ts`).
+  - [ ] Usar as caixas reveladas como gabarito de itens no replay (som ouvido x item revelado).
   - A gravação 114326 tem tooltips com o preço ("24.000" e o antigo "30.000" riscado): material para a leitura de preço.
   - O preço da caixa diz de qual pool ela saiu: em 50 das 110 combinações de perfil e categoria há mais de um preço,
     com raridades bem diferentes (Mystery Cargo: 0% de vermelho a 40.000, 0,1% a 70.000, 4% a 250.000). Hoje a página
